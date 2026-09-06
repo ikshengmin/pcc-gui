@@ -6,7 +6,7 @@ A native macOS desktop app authored in pcc-Python, compiled with `pcc1`
 
 ## What it does (technical)
 
-- Opens two real files (fixed sample paths or edit `app.py`), splits them
+- Opens two real files (paths supplied as command-line arguments), splits them
   into lines, hashes each line (64-bit rolling hash), runs a line-level LCS
   diff core (`diff_core.py`, pure pcc-Python).
 - Renders toolbar, dual panes/rows, overview and status as five bounded
@@ -36,6 +36,13 @@ source into `libpcc_gui_metal.dylib`; it does not generate GUI code from core.
 
 ## Build
 
+The installed v84 baseline does not recognize the current `c_rawptr` argv ABI.
+Full application qualification requires the newer core compiler; use `PCC1`
+only for an explicitly selected candidate. The current host compiler has passed
+both native window cases and the headless canary, with self backend and
+libpython off; that is separate from installed-pcc1 GC0..4 acceptance.
+
+
 ```bash
 # from the pcc-gui checkout root, after uv sync --locked
 uv run examples/mac_diff_app/build.sh
@@ -49,6 +56,13 @@ uv run examples/mac_diff_app/build.sh
 - Text: `CATextLayer` per slot (512 slots), top-left coordinates.
 - Bridge addresses and buffers use explicit integer address types across
   module calls, matching PCC application-module unsafe semantics.
+- Text descriptors opt into signed 16-bit positions through property flag 0x2;
+  component props carry each panel's origin, and both panes display file lines.
+- Scene rendering owns text slots 0..511, clears retired labels and reports
+  capacity or bridge failures through `render_ack()`.
+- The Metal library is loaded beside the executable via `@executable_path`,
+  so the launch working directory does not choose the bridge
+  ([Apple loading rules](https://developer.apple.com/library/archive/documentation/DeveloperTools/Conceptual/DynamicLibraries/100-Articles/DynamicLibraryDesignGuidelines.html)).
 - Events: targeted component listeners plus typed application run events;
   native AppKit lifecycle reachability is covered by its dedicated bridge gate.
 

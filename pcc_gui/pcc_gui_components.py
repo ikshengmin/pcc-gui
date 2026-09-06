@@ -11,6 +11,11 @@ nodes, and leaves the prior tree, node-owner routes, focus, and hover intact.
 The v1 slice admits only raw scalar/opaque slots copied into component-owned
 records.  Managed Python references remain outside this ABI until the
 documented GC0..4 trace/update admission gate is satisfied.
+
+Text descriptors may set property-mask flag 0x2 to opt into an explicit origin:
+flags bits 0..15 hold signed int16 x and bits 16..31 hold signed int16 y.
+Without that bit text retains origin (0, 0). The 72-byte record and its
+text-pointer/length/font/color payload words remain unchanged.
 """
 
 __pcc_runtime_port__ = True
@@ -1043,7 +1048,18 @@ def _apply_descriptor(node_id: int, descriptor) -> None:
     p3 = load_i64(descriptor, 56)
     _kit_kind(node_id, kind)
     if kind == 2:
-        _kit_text(node_id, 0, 0, int_to_ptr(p0), p1, p2, p3)
+        x = 0
+        y = 0
+        # Optional v1 text origin: signed 16-bit x/y packed into flags.
+        # Existing descriptors without property flag 0x2 retain origin (0, 0).
+        if (load_i64(descriptor, 24) & 2) != 0:
+            x = flags & 0xFFFF
+            y = (flags >> 16) & 0xFFFF
+            if x >= 0x8000:
+                x = x - 0x10000
+            if y >= 0x8000:
+                y = y - 0x10000
+        _kit_text(node_id, x, y, int_to_ptr(p0), p1, p2, p3)
     else:
         _kit_rect(node_id, p0, p1, p2, p3, flags)
         if kind == 3:

@@ -19,37 +19,48 @@ from pathlib import Path
 
 import pytest
 
+from gui_compiler import compiler_path
+from gui_compiler import write_metal_render_bridge
+
 REPO = Path(__file__).resolve().parents[1]
 APP = REPO / "examples" / "mac_diff_app" / "app.py"
 LEFT = REPO / "examples" / "mac_diff_app" / "samples" / "left.txt"
 RIGHT = REPO / "examples" / "mac_diff_app" / "samples" / "right.txt"
 
 
+@pytest.fixture
+def metal_bridge(tmp_path: Path) -> Path:
+    source = write_metal_render_bridge(tmp_path)
+    output = tmp_path / "libpcc_gui_metal.dylib"
+    built = subprocess.run(
+        ["xcrun", "--sdk", "macosx", "clang", "-fobjc-arc", "-framework", "Foundation", "-framework", "Metal",
+         "-framework", "AppKit", "-framework", "QuartzCore", "-dynamiclib",
+         str(source), "-o", str(output)], capture_output=True, text=True, timeout=120,
+    )
+    assert built.returncode == 0, built.stdout + built.stderr
+    return output
+
+
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires AppKit/Metal window")
 @pytest.mark.integration
-def test_mac_diff_app_smoke_truth(tmp_path: Path) -> None:
+def test_mac_diff_app_smoke_truth(tmp_path: Path, pcc_py_runtime_archive: Path, metal_bridge: Path) -> None:
     assert APP.is_file() and LEFT.is_file() and RIGHT.is_file()
     exe = tmp_path / "mac_diff_app"
     env = dict(os.environ)
-    env["PCC_RUNTIME_ARCHIVE"] = str(
-        REPO / "pcc" / "py_runtime" / "libpy_runtime_pcc_py.a")
+    env["PCC_RUNTIME_ARCHIVE"] = str(pcc_py_runtime_archive)
     b = subprocess.run(
-        [str(REPO / ".venv" / "bin" / "pcc"), "--backend", "self",
+        [str(compiler_path()), "--backend", "self",
          "--python-libpython", "off", "--ir-scaffold", "on",
          str(APP), "-o", str(exe)],
         capture_output=True, text=True, timeout=300, env=env,
     )
     assert b.returncode == 0, b.stdout + b.stderr
 
-    # dylib next to the exe so the app can dlopen it
-    import shutil
-    dylib = REPO / "examples" / "mac_diff_app" / "libpcc_gui_metal.dylib"
-    if dylib.is_file():
-        shutil.copy(dylib, tmp_path / "libpcc_gui_metal.dylib")
+    assert metal_bridge.parent == exe.parent
 
     r = subprocess.run(
         [str(exe), str(LEFT), str(RIGHT)],
-        cwd=tmp_path,
+        cwd=REPO,  # bridge discovery must not depend on the launch directory
         env=env,
         capture_output=True,
         text=True,
@@ -68,30 +79,26 @@ def test_mac_diff_app_smoke_truth(tmp_path: Path) -> None:
     assert "inserted= 1" in line, line
     assert "equal= 4" in line, line
     assert "changed= 1" in line, line
-    assert "PCC_GUI_BRIDGE_ACK render_present= 1" in out
+    assert "PCC_GUI_BRIDGE_ACK render_present= 0" in out
     assert "PCC_MAC_DIFF_DECLARATIVE_OK components=5" in out
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires AppKit/Metal window")
 @pytest.mark.integration
-def test_mac_diff_app_all_diff_cases(tmp_path: Path) -> None:
+def test_mac_diff_app_all_diff_cases(tmp_path: Path, pcc_py_runtime_archive: Path, metal_bridge: Path) -> None:
     """argv open with the all-cases fixture: equal/modify/delete/insert,
     consecutive deletes, tail diffs, empty lines, UTF-8, digits."""
     exe = tmp_path / "mac_diff_app"
     env = dict(os.environ)
-    env["PCC_RUNTIME_ARCHIVE"] = str(
-        REPO / "pcc" / "py_runtime" / "libpy_runtime_pcc_py.a")
+    env["PCC_RUNTIME_ARCHIVE"] = str(pcc_py_runtime_archive)
     b = subprocess.run(
-        [str(REPO / ".venv" / "bin" / "pcc"), "--backend", "self",
+        [str(compiler_path()), "--backend", "self",
          "--python-libpython", "off", "--ir-scaffold", "on",
          str(APP), "-o", str(exe)],
         capture_output=True, text=True, timeout=300, env=env,
     )
     assert b.returncode == 0, b.stdout + b.stderr
-    import shutil
-    dylib = REPO / "examples" / "mac_diff_app" / "libpcc_gui_metal.dylib"
-    if dylib.is_file():
-        shutil.copy(dylib, tmp_path / "libpcc_gui_metal.dylib")
+    assert metal_bridge.parent == exe.parent
     a = REPO / "examples" / "mac_diff_app" / "samples" / "case_a.txt"
     bb = REPO / "examples" / "mac_diff_app" / "samples" / "case_b.txt"
     r = subprocess.run(
@@ -112,5 +119,5 @@ def test_mac_diff_app_all_diff_cases(tmp_path: Path) -> None:
     assert "deleted= 1" in line, line
     assert "inserted= 0" in line, line
     assert "changed= 5" in line, line
-    assert "PCC_GUI_BRIDGE_ACK render_present= 1" in out
+    assert "PCC_GUI_BRIDGE_ACK render_present= 0" in out
     assert "PCC_MAC_DIFF_DECLARATIVE_OK components=5" in out

@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTRACT_PATH = ROOT / "pcc" / "py_runtime" / "gui_declarative_contract_v1.json"
+CONTRACT_PATH = ROOT / "pcc_gui" / "gui_declarative_contract_v1.json"
 REFERENCE_PATH = ROOT / "docs" / "refs_docs" / "gui-declarative" / "README.md"
 
 

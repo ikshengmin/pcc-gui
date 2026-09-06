@@ -19,6 +19,14 @@
     {"id": 2, "name": "opaque_handle", "traced": false, "actions": ["set"], "ownership": "one explicit retain per queue or base-queue record"},
     {"id": 3, "name": "managed_ref", "traced": true, "actions": ["set"], "admission": "requires retain/release, write barrier, root registration, trace and relocation update"}
   ],
+  "descriptor_properties": {
+    "text_origin": {
+      "node_kind": 2,
+      "property_mask_flag": 2,
+      "flags": "signed int16 x in bits 0..15; signed int16 y in bits 16..31",
+      "default": "x=0, y=0 when the bit is absent; payload words are unchanged"
+    }
+  },
   "records": [
     {
       "name": "PccGuiRenderContextV1",

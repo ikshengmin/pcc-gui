@@ -82,6 +82,7 @@ kit_valid = extern("pcc_kit_is_valid", (c_int64,), c_int32)
 kit_live = extern("pcc_kit_live_nodes", (), c_int64)
 kit_first = extern("pcc_kit_first_child", (c_int64,), c_int64)
 kit_next = extern("pcc_kit_next_sibling", (c_int64,), c_int64)
+kit_geometry = extern("pcc_kit_geometry_get", (c_int64,c_int64), c_int64)
 kit_destroy = extern("pcc_kit_destroy_subtree", (c_int64,), c_int64)
 
 components_init = extern("pcc_gui_components_init", (c_int64,c_int64,c_int64), c_int32)
@@ -159,12 +160,12 @@ def keyed_render_callback(context) -> int:
         return 1
     if mode == 0:
         descriptor(arena, 0, component, 10, 1, 0xFF112233, 1, 0, 0, 10, 10)
-        descriptor(arena, 1, component, 20, 2, 0, 1, label_address(), 5, 12, 0xFFABCDEF)
+        descriptor(arena, 1, component, 20, 2, 0xFFF7FFF9, 3, label_address(), 5, 12, 0xFFABCDEF)
         store_i32(count_out, 0, 2)
         return 2
     if capacity < 3:
         return -101
-    descriptor(arena, 0, component, 20, 2, 0, 1, label_address(), 5, 12, 0xFFABCDEF)
+    descriptor(arena, 0, component, 20, 2, 0xFFF7FFF9, 3, label_address(), 5, 12, 0xFFABCDEF)
     descriptor(arena, 1, component, 10, 1, 0xFF112233, 1, 0, 0, 20, 10)
     descriptor(arena, 2, component, 30, 1, 0xFF778899, 1, 5, 6, 7, 8)
     store_i32(count_out, 0, 3)
@@ -199,6 +200,8 @@ def main() -> int:
         return 7
     if owner_for_node(root) != component or owner_for_node(key10) != component:
         return 8
+    if kit_geometry(key20, 32) != -7 or kit_geometry(key20, 40) != -9:
+        return 36
     if kit_first(root) != key10 or kit_next(key10) != key20 or kit_live() != 3:
         return 9
 

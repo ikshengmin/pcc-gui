@@ -63,7 +63,7 @@ pcc_platform_sleep_ns = extern("pcc_platform_sleep_ns", (c_int64,), c_int64)
 
 # ---- module state ----
 # win@0 render@8 show@16 close@24 pump@32 closed@40 rects@48 colors@56
-# theme@64 anim@72 count@88 w@96 h@104 click@112 textfn@120 sizefn@128
+# theme@64 anim@72 scene-text-count@80 count@88 w@96 h@104 click@112 textfn@120 sizefn@128
 # panel@136 capture@144 pane@152 pane-focus@160 panel2@168
 # last-scene-render-ack@176 last-present-ack@184
 define_global_i64_array("pcc_gui_high_state",
@@ -117,6 +117,7 @@ def init(title: int, w: int, h: int, dylib: int) -> int:
     _setg(56, ptr_to_int(calloc(64 * 4, 1)))
     _setg(64, ptr_to_int(calloc(512, 1)))
     _setg(72, ptr_to_int(calloc(40, 1)))
+    _setg(80, 0)
     _setg(88, 0)
     _setg(96, w)
     _setg(104, h)
@@ -285,6 +286,9 @@ def render_scene(rects: int, colors: int, count: int, texts: int, tcount: int,
                  w: int, h: int) -> None:
     """Render a scene produced by the composition-tree kernel: rect
     commands via the Metal bridge, text commands via CATextLayer."""
+    if tcount < 0 or tcount > 512:
+        _setg(176, 2)
+        return
     _setg(176, call_i64_ptr3_i64_i64_i64(
         int_to_ptr(_gp(8)), int_to_ptr(_gp(0)), int_to_ptr(rects), int_to_ptr(colors), count, w, h))
     i = 0
@@ -297,11 +301,26 @@ def render_scene(rects: int, colors: int, count: int, texts: int, tcount: int,
         color = load_i64(tb, i * 48 + 32)
         tp = int_to_ptr(load_i64(tb, i * 48 + 40))
         prm = stack_alloc(24)
-        store_i64(prm, 0, 500 + i)
+        store_i64(prm, 0, i)
         store_i64(prm, 8, x)
         store_i64(prm, 16, y)
-        call_i64_ptr3_i64_i64_i64(int_to_ptr(_gp(120)), int_to_ptr(_gp(0)), tp, prm, ln, font, color)
+        status = call_i64_ptr3_i64_i64_i64(int_to_ptr(_gp(120)), int_to_ptr(_gp(0)), tp, prm, ln, font, color)
+        if status != 0 and _g(176) == 0:
+            _setg(176, status)
         i = i + 1
+
+    # Scene rendering owns the full native text-slot range. Retire old labels.
+    previous_count = _g(80)
+    while i < previous_count:
+        prm = stack_alloc(24)
+        store_i64(prm, 0, i)
+        store_i64(prm, 8, 0)
+        store_i64(prm, 16, 0)
+        status = call_i64_ptr3_i64_i64_i64(int_to_ptr(_gp(120)), int_to_ptr(_gp(0)), null(), prm, 0, 0, 0)
+        if status != 0 and _g(176) == 0:
+            _setg(176, status)
+        i = i + 1
+    _setg(80, tcount)
 
 
 def present() -> None:

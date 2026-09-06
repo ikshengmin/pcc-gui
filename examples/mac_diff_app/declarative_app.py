@@ -5,7 +5,7 @@ AppKit/Metal entrypoint.  UI updates are committed through the component and
 scheduler owners; the app never edits committed row nodes in a frame loop.
 """
 
-from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, c_void, extern, c_obj
+from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, c_rawptr, c_void, extern
 from pcc.unsafe import (
     calloc,
     cstr,
@@ -33,11 +33,12 @@ import pcc_gui_high as gui
 from diff_core import pcc_gui_diff_compute, pcc_gui_diff_init
 
 
-open_fn = extern("open", (c_ptr, c_int32), c_int64)
-read_fn = extern("read", (c_int64, c_ptr, c_int64), c_int64)
-close_fn = extern("close", (c_int64,), c_int64)
+open_fn = extern("open", (c_ptr, c_int32), c_int32)
+read_fn = extern("read", (c_int32, c_ptr, c_int64), c_int64)
+close_fn = extern("close", (c_int32,), c_int32)
 program_argc = extern("py_program_argc", (), c_int32)
-program_argv = extern("py_program_argv", (c_int64,), c_obj)
+# The runtime returns a raw argv address, not a managed Python object.
+program_argv = extern("py_program_argv", (c_int64,), c_rawptr)
 
 kit_init = extern("pcc_kit_init", (c_int64,), c_int32)
 kit_create = extern("pcc_kit_create", (c_int64,), c_int64)
@@ -45,6 +46,8 @@ kit_destroy = extern("pcc_kit_destroy_subtree", (c_int64,), c_int64)
 kit_valid = extern("pcc_kit_is_valid", (c_int64,), c_int32)
 kit_rect = extern("pcc_kit_rect", (c_int64,c_int64,c_int64,c_int64,c_int64,c_int32), c_void)
 kit_render = extern("pcc_kit_render", (c_int64,c_ptr,c_ptr,c_ptr,c_ptr,c_ptr), c_void)
+kit_geometry = extern("pcc_kit_geometry_get", (c_int64,c_int64), c_int64)
+gc_backend = extern("pcc_gc_backend", (), c_int64)
 
 components_init = extern("pcc_gui_components_init", (c_int64,c_int64,c_int64), c_int32)
 register_render = extern("pcc_gui_component_register_render", (c_int32,c_ptr), c_int32)
@@ -135,11 +138,11 @@ def _raw_len(value) -> int:
     return n
 
 
-def _read_lines(path, buf, ids, lines) -> int:
-    fd = open_fn(path, 0)
+def _read_lines(path: int, buf: int, ids: int, lines: int) -> int:
+    fd = open_fn(int_to_ptr(path), 0)
     if fd < 0:
         return -1
-    total = read_fn(fd, buf, 65536)
+    total = read_fn(fd, int_to_ptr(buf), 65536)
     close_fn(fd)
     if total < 0:
         return -1
@@ -148,12 +151,12 @@ def _read_lines(path, buf, ids, lines) -> int:
     h = -7046029254386353131
     i = 0
     while i < total:
-        b = load_i8(buf, i) & 255
+        b = load_i8(int_to_ptr(buf), i) & 255
         if b == 10:
             if count < 4096:
-                store_i64(lines, count * 16, start)
-                store_i64(lines, count * 16 + 8, i - start)
-                store_i64(ids, count * 8, h)
+                store_i64(int_to_ptr(lines), count * 16, start)
+                store_i64(int_to_ptr(lines), count * 16 + 8, i - start)
+                store_i64(int_to_ptr(ids), count * 8, h)
             count = count + 1
             start = i + 1
             h = -7046029254386353131
@@ -162,9 +165,9 @@ def _read_lines(path, buf, ids, lines) -> int:
         i = i + 1
     if start < total:
         if count < 4096:
-            store_i64(lines, count * 16, start)
-            store_i64(lines, count * 16 + 8, total - start)
-            store_i64(ids, count * 8, h)
+            store_i64(int_to_ptr(lines), count * 16, start)
+            store_i64(int_to_ptr(lines), count * 16 + 8, total - start)
+            store_i64(int_to_ptr(ids), count * 8, h)
         count = count + 1
     return count
 
@@ -267,28 +270,32 @@ def _repair_ops(count: int) -> int:
     return write
 
 
-def _descriptor_rect(arena, index: int, component: int, key: int, color: int, x: int, y: int, width: int, height: int, listener: int) -> None:
+def _descriptor_rect(context, arena, index: int, component: int, key: int, color: int, x: int, y: int, width: int, height: int, listener: int) -> None:
+    props = load_ptr(context, 16)
     record = ptr_add(arena, index * 72)
     store_i64(record, 0, component)
     store_i64(record, 8, key)
     store_i32(record, 16, 1)
     store_i32(record, 20, color)
     store_i64(record, 24, 1)
-    store_i64(record, 32, x)
-    store_i64(record, 40, y)
+    store_i64(record, 32, load_i64(props, 8) + x)
+    store_i64(record, 40, load_i64(props, 32) + y)
     store_i64(record, 48, width)
     store_i64(record, 56, height)
     store_i64(record, 64, listener)
 
 
-def _descriptor_text(arena, index: int, component: int, key: int, text, length: int, font: int, color: int) -> None:
+def _descriptor_text(context, arena, index: int, component: int, key: int, text: int, length: int, font: int, color: int, x: int, y: int) -> None:
+    props = load_ptr(context, 16)
+    px = load_i64(props, 8) + x
+    py = load_i64(props, 32) + y
     record = ptr_add(arena, index * 72)
     store_i64(record, 0, component)
     store_i64(record, 8, key)
     store_i32(record, 16, 2)
-    store_i32(record, 20, 0)
-    store_i64(record, 24, 1)
-    store_i64(record, 32, ptr_to_int(text))
+    store_i32(record, 20, (px & 0xFFFF) | ((py & 0xFFFF) << 16))
+    store_i64(record, 24, 3)
+    store_i64(record, 32, text)
     store_i64(record, 40, length)
     store_i64(record, 48, font)
     store_i64(record, 56, color)
@@ -311,16 +318,16 @@ def mac_diff_toolbar_render(context) -> int:
     count = 9 if expanded != 0 else 8
     if capacity < count:
         return -101
-    _descriptor_rect(arena, 0, component, 10, 0xFFE8E8E8, 0, 0, 900, 48, 101)
-    _descriptor_rect(arena, 1, component, 11, 0xFFF5F5F5, 16, 8, 90, 30, 0)
-    _descriptor_text(arena, 2, component, 12, cstr("Open"), 4, 13, 0xFF333333)
-    _descriptor_rect(arena, 3, component, 13, 0xFFF5F5F5, 116, 8, 110, 30, 0)
-    _descriptor_text(arena, 4, component, 14, cstr("Diffs"), 5, 13, 0xFF333333)
-    _descriptor_rect(arena, 5, component, 15, 0xFFF5F5F5, 240, 8, 80, 30, 0)
-    _descriptor_text(arena, 6, component, 16, cstr("Prev"), 4, 13, 0xFF333333)
-    _descriptor_text(arena, 7, component, 17, cstr("Next"), 4, 13, 0xFF333333)
+    _descriptor_rect(context, arena, 0, component, 10, 0xFFE8E8E8, 0, 0, 900, 48, 101)
+    _descriptor_rect(context, arena, 1, component, 11, 0xFFF5F5F5, 16, 8, 90, 30, 0)
+    _descriptor_text(context, arena, 2, component, 12, cstr("Open"), 4, 13, 0xFF333333, 40, 16)
+    _descriptor_rect(context, arena, 3, component, 13, 0xFFF5F5F5, 116, 8, 110, 30, 0)
+    _descriptor_text(context, arena, 4, component, 14, cstr("Diffs"), 5, 13, 0xFF333333, 140, 16)
+    _descriptor_rect(context, arena, 5, component, 15, 0xFFF5F5F5, 240, 8, 80, 30, 0)
+    _descriptor_text(context, arena, 6, component, 16, cstr("Prev"), 4, 13, 0xFF333333, 256, 16)
+    _descriptor_text(context, arena, 7, component, 17, cstr("Next"), 4, 13, 0xFF333333, 340, 16)
     if expanded != 0:
-        _descriptor_text(arena, 8, component, 18, cstr("Queued"), 6, 11, 0xFF225522)
+        _descriptor_text(context, arena, 8, component, 18, cstr("Queued"), 6, 11, 0xFF225522, 410, 17)
     store_i32(load_ptr(context, 64), 0, count)
     return count
 
@@ -331,7 +338,7 @@ def _pane_render(context, side: int) -> int:
     count = load_i64(global_addr("mac_diff_n"), 0)
     if count > 13:
         count = 13
-    if load_i32(context, 56) < count:
+    if load_i32(context, 56) < count * 2:
         return -101
     i = 0
     while i < count:
@@ -345,10 +352,21 @@ def _pane_render(context, side: int) -> int:
             color = 0xFFC8F0C8
         if (side == 0 and load_i64(OPS, i * 24 + 8) < 0) or (side == 1 and load_i64(OPS, i * 24 + 16) < 0):
             color = 0xFFFFFFFF
-        _descriptor_rect(arena, i, component, 1000 + i, color, 0, i * 24, 420, 22, 0)
+        _descriptor_rect(context, arena, i * 2, component, 1000 + i, color, 0, i * 24, 420, 22, 0)
+        line = load_i64(OPS, i * 24 + (8 if side == 0 else 16))
+        text = cstr("")
+        length = 0
+        if line >= 0:
+            if side == 0:
+                text = ptr_add(BUF_L, load_i64(LINES_L, line * 16))
+                length = load_i64(LINES_L, line * 16 + 8)
+            else:
+                text = ptr_add(BUF_R, load_i64(LINES_R, line * 16))
+                length = load_i64(LINES_R, line * 16 + 8)
+        _descriptor_text(context, arena, i * 2 + 1, component, 2000 + i, text, length, 13, 0xFF222222, 8, i * 24 + 4)
         i = i + 1
-    store_i32(load_ptr(context, 64), 0, count)
-    return count
+    store_i32(load_ptr(context, 64), 0, count * 2)
+    return count * 2
 
 
 @c_abi_typed_export("mac_diff_left_render", "i32", ("ptr",))
@@ -372,7 +390,7 @@ def mac_diff_overview_render(context) -> int:
     while i < total and count < limit:
         kind = load_i64(OPS, i * 24)
         if kind != 0:
-            _descriptor_rect(arena, count, component, 2000 + i, 0xFFC0A000, 0, i * 12, 8, 6, 0)
+            _descriptor_rect(context, arena, count, component, 2000 + i, 0xFFC0A000, 0, i * 12, 8, 6, 0)
             count = count + 1
         i = i + 1
     store_i32(load_ptr(context, 64), 0, count)
@@ -385,8 +403,8 @@ def mac_diff_status_render(context) -> int:
     arena = load_ptr(context, 48)
     if load_i32(context, 56) < 2:
         return -101
-    _descriptor_rect(arena, 0, component, 3000, 0xFFD8D8D8, 0, 0, 900, 34, 0)
-    _descriptor_text(arena, 1, component, 3001, cstr("pcc declarative diff"), 20, 13, 0xFF222222)
+    _descriptor_rect(context, arena, 0, component, 3000, 0xFFD8D8D8, 0, 0, 900, 34, 0)
+    _descriptor_text(context, arena, 1, component, 3001, cstr("pcc declarative diff"), 20, 13, 0xFF222222, 12, 8)
     store_i32(load_ptr(context, 64), 0, 2)
     return 2
 
@@ -421,8 +439,9 @@ def mac_diff_command_error(invoke, resolver: int) -> int:
 
 
 @c_abi_typed_export("mac_diff_root_release", "i64", ("i64",))
-def mac_diff_root_release(root: int) -> int:
-    return 0 if kit_destroy(root) > 0 else -1
+def mac_diff_root_release(handle: int) -> int:
+    # Lifecycle handle zero means no resource; kit node zero is a valid root.
+    return 0 if kit_destroy(handle - 1) > 0 else -1
 
 
 def _run_component(component: int, budget: int) -> int:
@@ -464,16 +483,23 @@ def mac_diff_app_event(event) -> int:
     return 0
 
 
-def _slot(value: int):
-    record = stack_alloc(24)
-    store_i32(record, 0, 1)
-    store_i64(record, 8, value)
-    store_i64(record, 16, 0)
-    return record
-
-
 def _mount_component(parent: int, root: int, callback: int) -> int:
-    return mount(parent, root, callback, null(), 0, _slot(0), 1)
+    # mount copies the slot while this frame is alive; never return stack memory.
+    state = stack_alloc(24)
+    store_i32(state, 0, 1)
+    store_i32(state, 4, 0)
+    store_i64(state, 8, 0)
+    store_i64(state, 16, 0)
+    props = stack_alloc(48)
+    store_i32(props, 0, 1)
+    store_i32(props, 4, 0)
+    store_i64(props, 8, kit_geometry(root, 32))
+    store_i64(props, 16, 0)
+    store_i32(props, 24, 1)
+    store_i32(props, 28, 0)
+    store_i64(props, 32, kit_geometry(root, 40))
+    store_i64(props, 40, 0)
+    return mount(parent, root, callback, props, 2, state, 1)
 
 
 def _invoke_command(command: int, target: int, request: int, resolver: int, value: int, expect_error: int) -> int:
@@ -502,13 +528,13 @@ def _invoke_command(command: int, target: int, request: int, resolver: int, valu
 
 
 def _load_diff() -> int:
-    left = cstr("samples/left.txt")
-    right = cstr("samples/right.txt")
+    left = ptr_to_int(cstr("samples/left.txt"))
+    right = ptr_to_int(cstr("samples/right.txt"))
     if program_argc() >= 3:
         left = program_argv(1)
         right = program_argv(2)
-    left_count = _read_lines(left, BUF_L, IDS_L, LINES_L)
-    right_count = _read_lines(right, BUF_R, IDS_R, LINES_R)
+    left_count = _read_lines(left, ptr_to_int(BUF_L), ptr_to_int(IDS_L), ptr_to_int(LINES_L))
+    right_count = _read_lines(right, ptr_to_int(BUF_R), ptr_to_int(IDS_R), ptr_to_int(LINES_R))
     if left_count <= 0 or right_count <= 0:
         return -1
     if pcc_gui_diff_init(256) != 0:
@@ -561,7 +587,7 @@ def run_app(hardware: int) -> int:
         return 6
     if register_reducer(1, function_addr("mac_diff_add"), 1) != 0:
         return 7
-    if register_listener_callback(1, function_addr("mac_diff_listener")) != 0 or register_effect_callback(1, function_addr("mac_diff_effect")) != 0:
+    if register_listener_callback(1, function_addr("mac_diff_listener")) != 0 or register_effect_callback(2, function_addr("mac_diff_effect")) != 0:
         return 8
 
     root = kit_create(-1)
@@ -614,7 +640,7 @@ def run_app(hardware: int) -> int:
     store_i64(global_addr("mac_diff_effects"), 0, ptr_to_int(effects))
     store_i64(global_addr("mac_diff_effect_count"), 0, ptr_to_int(effect_count))
     store_i64(global_addr("mac_diff_error"), 0, ptr_to_int(error))
-    if register_effect(toolbar, 1, 0, 1, 7) != 0:
+    if register_effect(toolbar, 1, 0, 2, 7) != 0:
         return 12
 
     if enqueue_reduce(toolbar, 3, 0, 1, 2, null()) != 0 or enqueue_reduce(toolbar, 3, 0, 1, 3, null()) != 0:
@@ -641,7 +667,7 @@ def run_app(hardware: int) -> int:
     theme = calloc(64, 8)
     if ptr_is_null(theme) or theme_init(theme) != 0:
         return 19
-    if theme_set(theme, 0, 0, 0xFF000000) != 0 or theme_set(theme, 0, 1, 0xFF112233) != 0 or theme_set(theme, 3, 8, 12) != 0:
+    if theme_set(theme, 0, 0, 0xFF112233) != 0 or theme_set(theme, 0, 1, 0xFF000000) != 0 or theme_set(theme, 3, 3, 12) != 0:
         return 20
     if theme_activate(theme) != 0:
         return 21
@@ -651,12 +677,14 @@ def run_app(hardware: int) -> int:
     operations = stack_alloc(80)
     if compile_style(classes, _raw_len(classes)) != 2 or cached_operations(classes, _raw_len(classes), operations, 2) != 2:
         return 23
+    if load_i64(operations, 16) != 0x7F112233 or load_i64(operations, 56) != -6:
+        return 42
     toolbar_node = node_for_key(toolbar, 10)
     if toolbar_node < 0 or apply_class(toolbar, toolbar_node, classes, _raw_len(classes)) != 0:
         return 24
-    if theme_set(theme, 0, 0, 0xFF445566) != 0 or style_dirty(toolbar) != 0:
+    if theme_set(theme, 0, 1, 0xFF445566) != 0 or style_dirty(toolbar) != 0:
         return 25
-    if theme_set(theme, 0, 1, 0xFF778899) != 0 or style_dirty(toolbar) != 1:
+    if theme_set(theme, 0, 0, 0xFF778899) != 0 or style_dirty(toolbar) != 1:
         return 26
     if apply_class(toolbar, toolbar_node, classes, _raw_len(classes)) != 0 or style_did_commit(toolbar) != 0:
         return 27
@@ -664,10 +692,14 @@ def run_app(hardware: int) -> int:
     if listen(101, toolbar, 1, 1, 0, toolbar_node) != 0:
         return 28
     path = stack_alloc(32)
-    if dispatch(root, 500, 20, 1, null(), path, 4, error) != 1:
+    dispatched = dispatch(root, 500, 20, 1, null(), path, 4, error)
+    if dispatched != 1:
         return 29
     if load_i64(global_addr("mac_diff_listener_calls"), 0) != 1 or _run_component(toolbar, -1) != 0 or state_value(toolbar, 0) != 7:
         return 30
+
+    if apply_class(toolbar, toolbar_node, classes, _raw_len(classes)) != 0 or style_did_commit(toolbar) != 0:
+        return 43
 
     if command_register(1, function_addr("mac_diff_command_result"), 2, 1, toolbar, 0) != 0:
         return 31
@@ -677,7 +709,7 @@ def run_app(hardware: int) -> int:
         return 33
 
     if hardware != 0:
-        if gui.init(cstr("pcc declarative diff"), 900, 600, cstr("./libpcc_gui_metal.dylib")) != 0:
+        if gui.init(ptr_to_int(cstr("pcc declarative diff")), 900, 600, ptr_to_int(cstr("@executable_path/libpcc_gui_metal.dylib"))) != 0:
             return 34
         rects = calloc(192, 32)
         colors = calloc(192, 4)
@@ -687,10 +719,13 @@ def run_app(hardware: int) -> int:
         store_i64(rect_count, 0, 0)
         store_i64(text_count, 0, 0)
         kit_render(root, rects, colors, rect_count, texts, text_count)
-        gui.render_scene(rects, colors, load_i64(rect_count, 0), texts, load_i64(text_count, 0), 900, 600)
+        gui.render_scene(ptr_to_int(rects), ptr_to_int(colors), load_i64(rect_count, 0), ptr_to_int(texts), load_i64(text_count, 0), 900, 600)
         print("PCC_GUI_BRIDGE_ACK render_present=", gui.render_ack())
+        if gui.render_ack() != 0:
+            gui.close()
+            return 44
 
-    if app_init(16, function_addr("mac_diff_app_event"), 1, root, function_addr("mac_diff_root_release"), function_addr("mac_diff_work_drain")) != 0:
+    if app_init(16, function_addr("mac_diff_app_event"), 1, root + 1, function_addr("mac_diff_root_release"), function_addr("mac_diff_work_drain")) != 0:
         return 35
     if app_startup() != 0 or app_drain(2, error) != 2:
         return 36
@@ -706,5 +741,5 @@ def run_app(hardware: int) -> int:
         return 41
     if hardware != 0:
         gui.close()
-    print("PCC_MAC_DIFF_DECLARATIVE_OK components=5 gc-mode=self-no-libpython")
+    print("PCC_MAC_DIFF_DECLARATIVE_OK components=5 gc-mode=self-no-libpython gc-backend=", gc_backend())
     return 0

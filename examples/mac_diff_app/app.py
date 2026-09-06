@@ -1,11 +1,16 @@
 """Canonical native entrypoint for the declarative mac diff application."""
 
+import sys
+
 import pcc_gui  # noqa: F401  pcc1 compiles the framework into this program's closure
 from declarative_app import run_app
 
 
 def main() -> int:
-    return run_app(1)
+    status = run_app(1)
+    if status != 0:
+        print("pcc-gui: diff viewer failed with code", status)
+    return status
 
 
-main()
+sys.exit(main())
