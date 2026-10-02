@@ -144,12 +144,18 @@ class MessageProjection:
         call_id: str = "",
         name: str = "",
         arguments: str = "",
+        turn: int = 0,
+        step: int = 0,
+        reasoning_content: str = "",
     ) -> None:
         self.role = role
         self.content = content
         self.call_id = call_id
         self.name = name
         self.arguments = arguments
+        self.turn = turn
+        self.step = step
+        self.reasoning_content = reasoning_content
 
 
 class TodoItem:
@@ -206,6 +212,8 @@ class SessionProjection:
         self.stats_first_token_at = -1
         self.stats_pending_call_ids = []
         self.stats_pending_call_times = []
+        self.response_text = ""
+        self.response_reasoning = ""
 
 
 class Session:
@@ -421,6 +429,10 @@ def fold_event(projection: SessionProjection, event: SessionEvent) -> None:
         fold_assistant_stats(projection, event)
     elif event.event_type == "assistant/chunk":
         projection.assistant_chunk_count += 1
+        if event.metadata == "text":
+            projection.response_text += event.text
+        elif event.metadata == "reasoning":
+            projection.response_reasoning += event.text
         if (
             projection.stats_open_turn == event.turn
             and projection.stats_open_step == event.step
@@ -434,16 +446,19 @@ def fold_event(projection: SessionProjection, event: SessionEvent) -> None:
         projection.messages.append(
             MessageProjection(
                 "assistant-tool-call",
-                "",
+                projection.response_text,
                 event.call_id,
                 event.name,
                 event.arguments,
+                event.turn,
+                event.step,
+                projection.response_reasoning,
             )
         )
     elif event.event_type == "tool/result":
         fold_tool_result_stats(projection, event)
         projection.messages.append(
-            MessageProjection("tool", event.text, event.call_id, event.name)
+            MessageProjection("tool", event.text, event.call_id, event.name, "", event.turn, event.step)
         )
     elif event.event_type == "todo/write":
         projection.todos = decode_todos(event.text)
@@ -466,6 +481,8 @@ def fold_event(projection: SessionProjection, event: SessionEvent) -> None:
         projection.todos = []
         projection.last_turn = event.turn
     elif event.event_type == "step/start":
+        projection.response_text = ""
+        projection.response_reasoning = ""
         projection.step_count += 1
         projection.last_step = event.step
         projection.stats_open_turn = event.turn

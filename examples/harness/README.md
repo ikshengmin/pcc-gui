@@ -50,10 +50,19 @@ bindings, dependency diagnostics, five event dispatch modes and reversible
 effects. Session state uses atomic JSONL persistence; settings are revisioned
 and atomically persisted; credential references stay secret-safe; anonymous
 identity, whole-list `todo_write`, and logged plan mode are assembled into the
-same runtime. The executable still selects a deterministic local model by
-default. Async Loader/HMR parity, real PCC HTTP/TLS Provider wiring, complete
-capability composition and native GUI pixel parity remain open; the runnable
-slice is not a full-port claim.
+same runtime. Declarative Loader updates now snapshot configuration and support
+explicit catalog hot replacement with rollback to the previous implementation.
+The DeepSeek adapter preserves indexed tool calls, reasoning and tool-result
+history, publishes live deltas into the session log, and propagates cancellation
+through its streaming transport contract. These paths have deterministic host
+regressions; current native acceptance is a separate gate.
+
+The executable still selects a deterministic local model by default. Async
+Loader/effect parity, a verified native PCC HTTP/TLS client, complete capability
+composition and native GUI pixel parity remain open. See the
+[provider/Loader qualification](../../docs/verification/harness-provider-loader-2026-10-02.md)
+for the exact executed scope and transport boundary; the runnable slice is not
+a full-port claim.
 
 ## Target architecture
 
@@ -85,13 +94,13 @@ not simplify product behavior merely to stay inside PCC's current subset.
 
 ## Task tracking
 
-The canonical PCC task board is `../../docs/goal/task-board.yaml`; this
-project's rows have the `HARNESS-` prefix.
-[`TASKS.md`](TASKS.md) is the project-local complete index for the pinned
-upstream commit and maps every upstream package domain to a finite board row.
-It includes PCC compiler/runtime prerequisites, native GUI parity, all
-capabilities and protocols, release closure, commit-ledger enforcement and
-scheduled upstream discovery.
+Active application/framework work is tracked in
+[pcc-gui issues](https://github.com/allstoalls/pcc-gui/issues); reusable
+compiler/runtime work belongs in [pcc issues](https://github.com/allstoalls/pcc/issues).
+[`TASKS.md`](TASKS.md) is the historical coverage index for the pinned upstream
+commit, including native GUI parity, capabilities/protocols, release closure
+and upstream discovery. Its `HARNESS-` references remain migration identifiers;
+the retired monorepo task board is not a current completion record.
 
 ## Upstream tracking
 

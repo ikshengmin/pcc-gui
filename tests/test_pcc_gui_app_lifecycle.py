@@ -352,3 +352,163 @@ def test_ordered_events_cancellation_and_complete_shutdown(
     assert "gui-app-lifecycle-ok" in _compile_run(
         tmp_path, pcc_py_runtime_archive, "gui_app_lifecycle", _APP_PROGRAM
     )
+
+
+_REENTRANCY_PROGRAM = r'''
+from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, extern
+from pcc.unsafe import define_global_i64, function_addr, global_addr, load_i32, load_i64, load_ptr, null, stack_alloc, store_i32, store_i64
+
+app_init = extern("pcc_gui_app_lifecycle_init", (c_int64,c_ptr,c_int64,c_int64,c_ptr,c_ptr), c_int32)
+app_startup = extern("pcc_gui_app_lifecycle_post_startup", (), c_int32)
+app_post = extern("pcc_gui_app_lifecycle_post", (c_int32,c_int64,c_ptr,c_int64,c_int32,c_int32), c_int32)
+app_native = extern("pcc_gui_app_lifecycle_native_event", (c_int32,c_int64,c_ptr,c_int64,c_int32,c_int32), c_int32)
+app_drain = extern("pcc_gui_app_lifecycle_drain", (c_int32,c_ptr), c_int32)
+app_pending = extern("pcc_gui_app_lifecycle_pending", (), c_int64)
+app_state = extern("pcc_gui_app_lifecycle_state", (), c_int32)
+terminal_count = extern("pcc_gui_app_lifecycle_terminal_count", (), c_int32)
+
+define_global_i64("stable_window_calls", 0)
+define_global_i64("stable_checks", 0)
+define_global_i64("stable_fail_next", 0)
+
+@c_abi_typed_export("stable_app_event", "i32", ("ptr",))
+def stable_app_event(event) -> int:
+    kind = load_i32(event, 8)
+    if kind == 4:
+        calls = load_i64(global_addr("stable_window_calls"), 0)
+        store_i64(global_addr("stable_window_calls"), 0, calls + 1)
+        if load_i64(global_addr("stable_fail_next"), 0) != 0:
+            store_i64(global_addr("stable_fail_next"), 0, 0)
+            return -1
+        if calls == 0:
+            sequence = load_i64(event, 0)
+            payload = load_ptr(event, 24)
+            replacement = stack_alloc(32)
+            store_i64(replacement, 0, 222)
+            store_i64(replacement, 8, 1)
+            store_i64(replacement, 16, 2)
+            store_i64(replacement, 24, 3)
+            if app_post(4, 77, replacement, 32, 0, 0) != 0:
+                return -2
+            if app_post(4, 77, replacement, 32, 0, 0) != 0:
+                return -3
+            if load_i64(event, 0) != sequence or load_i32(event, 8) != 4:
+                return -4
+            if load_i64(payload, 0) != 111 or load_i64(payload, 8) != 640:
+                return -5
+            if app_drain(1, null()) != -103:
+                return -6
+            if app_native(6, 77, null(), 0, 0, 0) != -103:
+                return -7
+            if app_pending() != 2:
+                return -8
+            store_i64(global_addr("stable_checks"), 0, 1)
+        elif load_i64(load_ptr(event, 24), 0) != 222:
+            return -9
+    return 0
+
+def main() -> int:
+    if app_init(2, function_addr("stable_app_event"), 77, 0, null(), null()) != 0:
+        return 1
+    if app_startup() != 0 or app_drain(2, null()) != 2:
+        return 2
+    if app_post(3, 77, null(), 0, 0, 0) != 0 or app_drain(1, null()) != 1:
+        return 3
+    payload = stack_alloc(32)
+    store_i64(payload, 0, 111)
+    store_i64(payload, 8, 640)
+    store_i64(payload, 16, 480)
+    store_i64(payload, 24, 0)
+    if app_post(4, 77, payload, 32, 0, 0) != 0 or app_drain(1, null()) != 1:
+        return 4
+    if load_i64(global_addr("stable_checks"), 0) != 1 or app_pending() != 2:
+        return 5
+    if app_drain(2, null()) != 2 or load_i64(global_addr("stable_window_calls"), 0) != 3:
+        return 6
+    store_i64(global_addr("stable_fail_next"), 0, 1)
+    if app_post(4, 77, payload, 32, 0, 0) != 0 or app_drain(1, null()) != -116:
+        return 7
+    if app_native(6, 77, null(), 0, 0, 0) != 0:
+        return 8
+    if app_post(7, 77, null(), 0, 1, 9) != 0 or app_drain(1, null()) != 1:
+        return 9
+    if app_state() != 7 or terminal_count() != 1:
+        return 10
+    print("GUI_APP_STABLE_REENTRANT_OK")
+    return 0
+
+main()
+'''
+
+
+def test_callback_payload_survives_ring_wrap_and_recursive_delivery_is_rejected(
+    tmp_path: Path, pcc_py_runtime_archive: Path
+) -> None:
+    assert "GUI_APP_STABLE_REENTRANT_OK" in _compile_run(
+        tmp_path, pcc_py_runtime_archive, "gui_app_reentrancy", _REENTRANCY_PROGRAM
+    )
+
+
+_TEARDOWN_FAILURE_PROGRAM = r'''
+from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, extern
+from pcc.unsafe import define_global_i64, function_addr, global_addr, load_i32, load_i64, null, stack_alloc, store_i64
+
+app_init = extern("pcc_gui_app_lifecycle_init", (c_int64,c_ptr,c_int64,c_int64,c_ptr,c_ptr), c_int32)
+app_startup = extern("pcc_gui_app_lifecycle_post_startup", (), c_int32)
+app_post = extern("pcc_gui_app_lifecycle_post", (c_int32,c_int64,c_ptr,c_int64,c_int32,c_int32), c_int32)
+app_drain = extern("pcc_gui_app_lifecycle_drain", (c_int32,c_ptr), c_int32)
+app_pending = extern("pcc_gui_app_lifecycle_pending", (), c_int64)
+app_state = extern("pcc_gui_app_lifecycle_state", (), c_int32)
+terminal_count = extern("pcc_gui_app_lifecycle_terminal_count", (), c_int32)
+
+define_global_i64("failed_release_calls", 0)
+define_global_i64("failed_exit_calls", 0)
+
+@c_abi_typed_export("failed_app_release", "i64", ("i64",))
+def failed_app_release(handle: int) -> int:
+    store_i64(global_addr("failed_release_calls"), 0, load_i64(global_addr("failed_release_calls"), 0) + 1)
+    return -1
+
+@c_abi_typed_export("failed_app_event", "i32", ("ptr",))
+def failed_app_event(event) -> int:
+    if load_i32(event, 8) == 8:
+        if load_i32(event, 40) != 23:
+            return -2
+        store_i64(global_addr("failed_exit_calls"), 0, load_i64(global_addr("failed_exit_calls"), 0) + 1)
+        # The earlier teardown failure must remain the reported error.
+        return -1
+    return 0
+
+def main() -> int:
+    if app_init(4, function_addr("failed_app_event"), 77, 555, function_addr("failed_app_release"), null()) != 0:
+        return 1
+    if app_startup() != 0 or app_drain(2, null()) != 2:
+        return 2
+    if app_post(3, 77, null(), 0, 0, 0) != 0 or app_drain(1, null()) != 1:
+        return 3
+    error = stack_alloc(24)
+    if app_post(7, 77, null(), 0, 1, 23) != 0 or app_drain(1, error) != -115:
+        return 4
+    if load_i32(error, 0) != -115 or load_i32(error, 4) != 12 or load_i64(error, 8) != 4:
+        return 5
+    if app_state() != 7 or terminal_count() != 1 or app_pending() != 0:
+        return 6
+    if load_i64(global_addr("failed_release_calls"), 0) != 1 or load_i64(global_addr("failed_exit_calls"), 0) != 1:
+        return 7
+    if app_post(7, 77, null(), 0, 1, 23) != -108 or app_drain(1, null()) != 0:
+        return 8
+    if load_i64(global_addr("failed_release_calls"), 0) != 1 or terminal_count() != 1:
+        return 9
+    print("GUI_APP_FAILED_TEARDOWN_TERMINAL_OK")
+    return 0
+
+main()
+'''
+
+
+def test_teardown_failure_still_delivers_one_terminal_exit(
+    tmp_path: Path, pcc_py_runtime_archive: Path
+) -> None:
+    assert "GUI_APP_FAILED_TEARDOWN_TERMINAL_OK" in _compile_run(
+        tmp_path, pcc_py_runtime_archive, "gui_app_failed_teardown", _TEARDOWN_FAILURE_PROGRAM
+    )

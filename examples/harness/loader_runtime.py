@@ -6,16 +6,17 @@ import json
 class PluginCatalogRegistration:
     """Single-shot ownership handle for one plugin catalog contribution."""
 
-    def __init__(self, catalog, name: str) -> None:
+    def __init__(self, catalog, name: str, registration_id: int) -> None:
         self.catalog = catalog
         self.name = name
         self.active = True
+        self.registration_id = registration_id
 
     def dispose(self) -> None:
         if not self.active:
             return
         self.active = False
-        self.catalog._remove(self.name)
+        self.catalog._remove_registration(self.name, self.registration_id)
 
 
 class PluginCatalog:
@@ -24,6 +25,8 @@ class PluginCatalog:
     def __init__(self) -> None:
         self.names = []
         self.plugins = []
+        self.registration_ids = []
+        self.next_registration_id = 1
 
     def register(self, name: str, plugin) -> PluginCatalogRegistration:
         if name == "":
@@ -32,7 +35,32 @@ class PluginCatalog:
             raise ValueError("plugin catalog name is already registered: " + name)
         self.names.append(name)
         self.plugins.append(plugin)
-        return PluginCatalogRegistration(self, name)
+        registration_id = self.next_registration_id
+        self.next_registration_id += 1
+        self.registration_ids.append(registration_id)
+        return PluginCatalogRegistration(self, name, registration_id)
+
+    def replace(self, name: str, plugin) -> PluginCatalogRegistration:
+        """Publish a new plugin identity for the next Loader reconciliation."""
+        index = self._index_of(name)
+        if index < 0:
+            raise KeyError("plugin is not registered in catalog: " + name)
+        registration_id = self.next_registration_id
+        self.next_registration_id += 1
+        self.plugins[index] = plugin
+        self.registration_ids[index] = registration_id
+        return PluginCatalogRegistration(self, name, registration_id)
+
+    def registration_id(self, name: str) -> int:
+        index = self._index_of(name)
+        if index < 0:
+            raise KeyError("plugin is not registered in catalog: " + name)
+        return self.registration_ids[index]
+
+    def _remove_registration(self, name: str, registration_id: int) -> None:
+        index = self._index_of(name)
+        if index >= 0 and self.registration_ids[index] == registration_id:
+            self._remove(name)
 
     def resolve(self, name: str):
         index = self._index_of(name)
@@ -46,6 +74,7 @@ class PluginCatalog:
             return
         self.names.pop(index)
         self.plugins.pop(index)
+        self.registration_ids.pop(index)
 
     def _index_of(self, name: str) -> int:
         i = 0
@@ -190,7 +219,7 @@ def _copy_entry_tree(entries):
             LoaderEntry(
                 entry.entry_id,
                 entry.name,
-                entry.config,
+                json.loads(json.dumps(entry.config)),
                 entry.requires,
                 entry.inject,
                 entry.provides,
@@ -348,9 +377,12 @@ class LoaderRecord:
         self.entry = entry
         self.parent_id = parent_id
         self.context = None
+        self.entry_signature = entry.signature()
+        self.plugin = None
+        self.registration_id = 0
 
     def signature(self) -> str:
-        return self.parent_id + "\0" + self.entry.signature()
+        return self.parent_id + "\0" + self.entry_signature + "\0" + str(self.registration_id)
 
 
 class PluginLoader:
@@ -367,9 +399,12 @@ class PluginLoader:
         prefix = self._common_prefix(self.records, desired)
         old_suffix = self.records[prefix:]
         failure = self._unmount(old_suffix)
+        # Every suffix record was visited and retired even if cleanup failed.
+        # Leaving those records in the committed list makes an identical retry
+        # compare equal and silently skip mounting its now-missing resources.
+        self.records = self.records[:prefix]
         if failure is not None:
             raise failure
-        self.records = self.records[:prefix]
         installed = []
         try:
             i = prefix
@@ -417,8 +452,12 @@ class PluginLoader:
 
     def _prepare(self, entries):
         records = []
-        self._flatten(entries, "", False, records)
+        self._flatten(_copy_entry_tree(entries), "", False, records)
         self._validate(records)
+        for record in records:
+            if not record.entry.group:
+                record.plugin = self.catalog.resolve(record.entry.name)
+                record.registration_id = self.catalog.registration_id(record.entry.name)
         return self._stable_dependency_order(records)
 
     def _flatten(self, entries, parent_id: str, parent_disabled: bool, output) -> None:
@@ -536,7 +575,10 @@ class PluginLoader:
                 i += 1
             record.context = context
             return
-        plugin = self.catalog.resolve(entry.name)
+        # Capture the implementation with its committed entry. Rollback after
+        # failed hot replacement must remount the old implementation, even
+        # while the catalog points at the failed candidate.
+        plugin = record.plugin
         config = entry.config
 
         def configured(scope):

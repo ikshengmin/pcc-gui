@@ -56,7 +56,7 @@ def test_event_owner_freezes_callback_abis_and_component_hooks() -> None:
         encoding="utf-8"
     )
     lowering = (
-        CORE_ROOT / "pcc" / "py_frontend" / "codegen" / "unsafe_lowering.py"
+        CORE_ROOT / "pcc" / "frontends" / "python" / "codegen" / "unsafe_lowering.py"
     ).read_text(encoding="utf-8")
     assert package.count("from . import pcc_gui_events") == 1
     assert "LISTENER_SIZE = 40" in source
@@ -326,4 +326,76 @@ def test_target_bubble_state_commit_and_lifecycle_order(
         pcc_py_runtime_archive,
         "gui_event_lifecycle",
         _EVENT_LIFECYCLE_PROGRAM,
+    )
+
+
+_EVENT_FAILED_CLEANUP_PROGRAM = r'''
+from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, extern
+from pcc.unsafe import define_global_i64, function_addr, global_addr, load_i32, load_i64, load_ptr, null, stack_alloc, store_i32, store_i64
+
+kit_init = extern("pcc_kit_init", (c_int64,), c_int32)
+kit_create = extern("pcc_kit_create", (c_int64,), c_int64)
+components_init = extern("pcc_gui_components_init", (c_int64,c_int64,c_int64), c_int32)
+register_render = extern("pcc_gui_component_register_render", (c_int32,c_ptr), c_int32)
+mount = extern("pcc_gui_component_mount", (c_int64,c_int64,c_int32,c_ptr,c_int32,c_ptr,c_int32), c_int64)
+unmount = extern("pcc_gui_component_unmount", (c_int64,), c_int32)
+events_init = extern("pcc_gui_events_init", (c_int64,c_int64,c_int64,c_int64), c_int32)
+register_effect_callback = extern("pcc_gui_events_register_effect_callback", (c_int32,c_ptr), c_int32)
+register_effect = extern("pcc_gui_events_register_effect", (c_int64,c_int32,c_int64,c_int32,c_int64), c_int32)
+drain_passive = extern("pcc_gui_events_drain_passive", (c_int32,c_ptr), c_int32)
+shutdown = extern("pcc_gui_events_shutdown", (c_ptr,), c_int32)
+last_error = extern("pcc_gui_events_last_error", (), c_int32)
+
+define_global_i64("cleanup_failure_trace", 0)
+
+@c_abi_typed_export("cleanup_empty_render", "i32", ("ptr",))
+def cleanup_empty_render(context) -> int:
+    store_i32(load_ptr(context, 64), 0, 0)
+    return 0
+
+@c_abi_typed_export("cleanup_failure_effect", "i32", ("i64", "i32", "i64"))
+def cleanup_failure_effect(component: int, phase: int, payload: int) -> int:
+    if phase == 4:
+        store_i64(global_addr("cleanup_failure_trace"), 0, load_i64(global_addr("cleanup_failure_trace"), 0) * 10 + payload)
+        if payload == 2:
+            return -1
+    return 0
+
+def main() -> int:
+    if kit_init(2) != 0 or components_init(2, 2, 2) != 0:
+        return 1
+    if register_render(1, function_addr("cleanup_empty_render")) != 0:
+        return 2
+    component = mount(-1, kit_create(-1), 1, null(), 0, null(), 0)
+    if component < 0 or events_init(2, 2, 2, 4) != 0:
+        return 3
+    if register_effect_callback(2, function_addr("cleanup_failure_effect")) != 0:
+        return 4
+    if register_effect(component, 11, 0, 2, 1) != 0 or register_effect(component, 12, 0, 2, 2) != 0:
+        return 5
+    if drain_passive(4, null()) != 2 or unmount(component) != 0:
+        return 6
+    error = stack_alloc(24)
+    if shutdown(error) != -116 or last_error() != -116:
+        return 7
+    if load_i32(error, 0) != -116 or load_i32(error, 4) != 4 or load_i64(error, 8) != 12:
+        return 8
+    if load_i64(global_addr("cleanup_failure_trace"), 0) != 21:
+        return 9
+    if drain_passive(4, null()) != 0 or shutdown(null()) != 0:
+        return 10
+    if load_i64(global_addr("cleanup_failure_trace"), 0) != 21:
+        return 11
+    print("GUI_EVENT_FAILED_CLEANUP_CONTINUES_OK")
+    return 0
+
+main()
+'''
+
+
+def test_shutdown_attempts_later_passive_cleanup_after_callback_failure(
+    tmp_path: Path, pcc_py_runtime_archive: Path
+) -> None:
+    assert "GUI_EVENT_FAILED_CLEANUP_CONTINUES_OK" in _compile_run(
+        tmp_path, pcc_py_runtime_archive, "gui_event_cleanup_failure", _EVENT_FAILED_CLEANUP_PROGRAM
     )

@@ -7,8 +7,9 @@ copy payload bytes into this owner's bounded queue before returning.
 
 An accepted exit performs the owned cleanup chain in one order: scheduler
 work, command resolvers/state, components/listeners/effects, passive effects,
-then the retained native window handle. Only after that chain succeeds is
-Exit delivered. Webview events have no kind and cannot enter this module.
+then the retained native window handle. Exit is delivered once after every
+owner has been visited, including when teardown reports an error. Webview
+events have no kind and cannot enter this module.
 """
 
 __pcc_runtime_port__ = True
@@ -94,6 +95,7 @@ define_global_i64("pcc_gui_app_lifecycle_window_handle", 0)
 define_global_i64("pcc_gui_app_lifecycle_window_release", 0)
 define_global_i64("pcc_gui_app_lifecycle_cancel_used", 0)
 define_global_i64("pcc_gui_app_lifecycle_terminal_count_value", 0)
+define_global_i64("pcc_gui_app_lifecycle_processing", 0)
 
 
 def _base(name: str) -> int:
@@ -386,10 +388,6 @@ def _finish_exit(exit_code: int, error_out) -> int:
     if status != OK and failure_subject == 0:
         failure_subject = 4
     _release_event_storage()
-    if failure_subject != 0:
-        return _write_error(
-            error_out, ERR_TEARDOWN, PHASE_APP_TEARDOWN, failure_subject
-        )
     # stack_alloc is a compile-time intrinsic; keep the frozen ABI size literal.
     terminal = stack_alloc(48)
     sequence = _base("pcc_gui_app_lifecycle_sequence")
@@ -406,6 +404,10 @@ def _finish_exit(exit_code: int, error_out) -> int:
     _set("pcc_gui_app_lifecycle_terminal_count_value", 1)
     _set("pcc_gui_app_lifecycle_state_value", APP_EXITED)
     callback_status = _call_app(terminal)
+    if failure_subject != 0:
+        return _write_error(
+            error_out, ERR_TEARDOWN, PHASE_APP_TEARDOWN, failure_subject
+        )
     if callback_status != OK:
         return _write_error(
             error_out, ERR_CALLBACK_FAILED, PHASE_APP_EVENT, EVENT_EXIT
@@ -495,10 +497,31 @@ def _process_event(record, error_out) -> int:
     )
 
 
+def _process_next(error_out) -> int:
+    # The callback may enqueue enough events to reuse the just-consumed ring
+    # slot. Its borrowed record and payload must remain stable until return.
+    # These fixed-size stack arenas live in this caller, not in a helper that
+    # returns already-expired stack storage.
+    stable_event = stack_alloc(48)
+    stable_payload = stack_alloc(256)
+    head = _base("pcc_gui_app_lifecycle_head")
+    queued = _event_at(head)
+    memcpy(stable_event, queued, APP_EVENT_SIZE)
+    length = load_i64(queued, 32)
+    if length > 0:
+        memcpy(stable_payload, _payload_at(head), length)
+        store_ptr(stable_event, 24, stable_payload)
+    _set("pcc_gui_app_lifecycle_head", head + 1)
+    store_i64(global_addr("pcc_gui_app_lifecycle_processing"), 0, 1)
+    status = _process_event(stable_event, error_out)
+    store_i64(global_addr("pcc_gui_app_lifecycle_processing"), 0, 0)
+    return status
+
+
 @c_abi_typed_export("pcc_gui_app_lifecycle_drain", "i32", ("i32", "ptr"))
 def pcc_gui_app_lifecycle_drain(limit: int, error_out) -> int:
     _clear_error(error_out)
-    if limit <= 0:
+    if limit <= 0 or load_i64(global_addr("pcc_gui_app_lifecycle_processing"), 0) != 0:
         return _write_error(
             error_out, ERR_INVALID_TRANSITION, PHASE_APP_DRAIN, limit
         )
@@ -508,9 +531,7 @@ def pcc_gui_app_lifecycle_drain(limit: int, error_out) -> int:
         tail = _base("pcc_gui_app_lifecycle_tail")
         if head >= tail:
             return completed
-        record = _event_at(head)
-        _set("pcc_gui_app_lifecycle_head", head + 1)
-        status = _process_event(record, error_out)
+        status = _process_next(error_out)
         if status < 0:
             return status
         completed = completed + 1
@@ -533,6 +554,8 @@ def pcc_gui_app_lifecycle_native_event(
     exit_code: int,
 ) -> int:
     """Synchronous sink used by the Objective-C delegate adapter."""
+    if load_i64(global_addr("pcc_gui_app_lifecycle_processing"), 0) != 0:
+        return ERR_INVALID_TRANSITION
     if _base("pcc_gui_app_lifecycle_head") != _base(
         "pcc_gui_app_lifecycle_tail"
     ):
@@ -542,10 +565,7 @@ def pcc_gui_app_lifecycle_native_event(
     )
     if status != OK:
         return status
-    head = _base("pcc_gui_app_lifecycle_head")
-    record = _event_at(head)
-    _set("pcc_gui_app_lifecycle_head", head + 1)
-    return _process_event(record, null())
+    return _process_next(null())
 
 
 @c_abi_typed_export("pcc_gui_app_lifecycle_post_startup", "i32", ())

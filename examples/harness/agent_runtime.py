@@ -4,9 +4,10 @@ from model_runtime import (
     ModelMessage,
     ModelProviderRegistry,
     ModelRequest,
+    ToolCall,
 )
 from session_runtime import Session
-from tool_runtime import ToolRuntime
+from tool_runtime import Cancellation, OperationCancelled, ToolRuntime
 
 
 class PromptSection:
@@ -110,6 +111,7 @@ class AgentLoop:
         self.config = config
         self.cancelled = False
         self.cancel_reason = ""
+        self.cancellation = Cancellation()
         self.pre_step_hooks = []
 
     def add_pre_step_hook(self, callback) -> None:
@@ -119,6 +121,7 @@ class AgentLoop:
     def cancel(self, reason: str = "user") -> None:
         self.cancelled = True
         self.cancel_reason = reason
+        self.cancellation.cancel(reason)
 
     def run_turn(self, user_text: str) -> str:
         if user_text == "":
@@ -139,6 +142,7 @@ class AgentLoop:
                     self.session.end_turn("blocked")
                     return response
                 self._run_pre_step_hooks()
+                self.cancellation.require_active()
                 step = self.session.start_step()
                 system = self.prompt.assemble(self.session)
                 self.session.append(
@@ -158,9 +162,23 @@ class AgentLoop:
                     self._model_messages(),
                     self.tools.schemas(),
                     self.config.max_tokens,
+                    cancellation=self.cancellation,
+                    on_chunk=lambda chunk: self._append_chunks(turn, step, [chunk]),
                 )
                 result = self.models.complete(request)
-                self._append_chunks(turn, step, result.chunks)
+                self.cancellation.require_active()
+                self._append_chunks(turn, step, result.chunks[request.published_chunks:])
+                if result.stop_reason != "stop" and result.stop_reason != "tool_calls":
+                    response = result.text
+                    if response != "":
+                        self.session.append(
+                            "assistant/message", response, turn=turn, step=step,
+                            input_tokens=result.input_tokens, output_tokens=result.output_tokens,
+                        )
+                    self.session.end_step()
+                    reason = "max-tokens" if result.stop_reason == "length" else "error"
+                    self.session.end_turn(reason)
+                    return response
                 if len(result.tool_calls) == 0:
                     response = result.text
                     self.session.append(
@@ -176,6 +194,7 @@ class AgentLoop:
                 else:
                     i = 0
                     while i < len(result.tool_calls):
+                        self.cancellation.require_active()
                         call = result.tool_calls[i]
                         self.session.append(
                             "tool/call",
@@ -186,8 +205,9 @@ class AgentLoop:
                             arguments=call.arguments,
                         )
                         outcome = self.tools.execute(
-                            call.call_id, call.name, call.arguments, None, self.session
+                            call.call_id, call.name, call.arguments, self.cancellation, self.session
                         )
+                        self.cancellation.require_active()
                         self.session.append(
                             "tool/result",
                             outcome.content,
@@ -202,6 +222,12 @@ class AgentLoop:
                     self.session.end_step()
                 step_count += 1
             self.session.end_turn("completed")
+            return response
+        except OperationCancelled:
+            if self.session.active_step != 0:
+                self.session.end_step()
+            if self.session.active_turn != 0:
+                self.session.end_turn("aborted")
             return response
         except Exception:
             if self.session.active_step != 0:
@@ -240,15 +266,34 @@ class AgentLoop:
         while i < len(projection.messages):
             message = projection.messages[i]
             if message.role == "assistant-tool-call":
+                # One model response may request several tools. Older logs
+                # interleave call/result pairs; group the same response before
+                # serializing its result messages without changing that log.
+                calls = []
+                results = []
+                j = i
+                while j < len(projection.messages):
+                    part = projection.messages[j]
+                    if part.turn != message.turn or part.step != message.step:
+                        break
+                    if part.role == "assistant-tool-call":
+                        calls.append(ToolCall(part.call_id, part.name, part.arguments))
+                    elif part.role == "tool":
+                        results.append(ModelMessage("tool", part.content, part.call_id, part.name))
+                    else:
+                        break
+                    j += 1
                 messages.append(
                     ModelMessage(
                         "assistant",
-                        "",
-                        message.call_id,
-                        message.name,
-                        message.arguments,
+                        message.content,
+                        tool_calls=calls,
+                        reasoning_content=message.reasoning_content,
                     )
                 )
+                messages.extend(results)
+                i = j
+                continue
             else:
                 messages.append(
                     ModelMessage(

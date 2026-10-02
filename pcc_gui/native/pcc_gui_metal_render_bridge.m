@@ -35,13 +35,14 @@ typedef struct {
 
 static PccGuiLifecycleSink pcc_lifecycle_sink = NULL;
 static uint64_t pcc_lifecycle_window_id = 0;
+static __weak NSWindow *pcc_lifecycle_window = nil;
 
 @interface PccGuiLifecycleDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
 @end
 
 @implementation PccGuiLifecycleDelegate
 - (void)windowDidResize:(NSNotification *)notification {
-  if (pcc_lifecycle_sink == NULL) return;
+  if (pcc_lifecycle_sink == NULL || [notification object] != pcc_lifecycle_window) return;
   NSWindow *window = (NSWindow *)[notification object];
   NSRect bounds = [[window contentView] bounds];
   PccGuiNativeWindowEventV1 event = {
@@ -52,14 +53,14 @@ static uint64_t pcc_lifecycle_window_id = 0;
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
-  if (pcc_lifecycle_sink == NULL) return;
+  if (pcc_lifecycle_sink == NULL || [notification object] != pcc_lifecycle_window) return;
   PccGuiNativeWindowEventV1 event = {2, 0, 0, 0, 0};
   pcc_lifecycle_sink(PCC_GUI_APP_WINDOW_EVENT, pcc_lifecycle_window_id,
                      &event, sizeof(event), 0, 0);
 }
 
 - (void)windowWillClose:(NSNotification *)notification {
-  if (pcc_lifecycle_sink == NULL) return;
+  if (pcc_lifecycle_sink == NULL || [notification object] != pcc_lifecycle_window) return;
   PccGuiNativeWindowEventV1 event = {3, 0, 0, 0, 0};
   pcc_lifecycle_sink(PCC_GUI_APP_WINDOW_EVENT, pcc_lifecycle_window_id,
                      &event, sizeof(event), 0, 0);
@@ -95,7 +96,8 @@ static uint64_t pcc_lifecycle_window_id = 0;
   int32_t status = pcc_lifecycle_sink(
       PCC_GUI_APP_EXIT_REQUESTED, pcc_lifecycle_window_id,
       NULL, 0, 0, 0);
-  return status == 1 ? NSTerminateCancel : NSTerminateNow;
+  // An invalid/reentrant request or failed callback is not consent to quit.
+  return status == 0 ? NSTerminateNow : NSTerminateCancel;
 }
 @end
 
@@ -468,6 +470,11 @@ int64_t pcc_gui_metal_lifecycle_install(
     if (pcc_lifecycle_delegate == nil) {
       pcc_lifecycle_delegate = [[PccGuiLifecycleDelegate alloc] init];
     }
+    if (pcc_lifecycle_window != nil && pcc_lifecycle_window != window &&
+        [pcc_lifecycle_window delegate] == pcc_lifecycle_delegate) {
+      [pcc_lifecycle_window setDelegate:nil];
+    }
+    pcc_lifecycle_window = window;
     pcc_lifecycle_sink = sink;
     pcc_lifecycle_window_id = window_id;
     [NSApp setDelegate:pcc_lifecycle_delegate];
@@ -479,7 +486,8 @@ int64_t pcc_gui_metal_lifecycle_install(
 int64_t pcc_gui_metal_lifecycle_probe(void *handle, const char *opened_path) {
   @autoreleasepool {
     if (handle == NULL || opened_path == NULL || pcc_lifecycle_delegate == nil ||
-        pcc_lifecycle_sink == NULL) return 2;
+        pcc_lifecycle_sink == NULL ||
+        (__bridge NSWindow *)handle != pcc_lifecycle_window) return 2;
     NSWindow *window = (__bridge NSWindow *)handle;
     NSRect frame = [window frame];
     frame.size.width = frame.size.width + 1.0;
@@ -1023,7 +1031,33 @@ int64_t pcc_gui_metal_window_close(void *handle) {
   @autoreleasepool {
     if (handle == NULL) return -1;
     NSWindow *win = (__bridge NSWindow *)handle;
+    BOOL owns_render_cache = [pcc_metal_view window] == win;
+    NSView *closing_render_view = pcc_metal_view;
     [win close];
+    if (pcc_lifecycle_window == win) {
+      if ([win delegate] == pcc_lifecycle_delegate) [win setDelegate:nil];
+      if ([NSApp delegate] == pcc_lifecycle_delegate) [NSApp setDelegate:nil];
+      pcc_lifecycle_window = nil;
+      pcc_lifecycle_sink = NULL;
+      pcc_lifecycle_window_id = 0;
+    }
+    // These caches own views/layers, so merely releasing NSWindow leaves old
+    // controls alive and makes the next window reuse controls on a dead tree.
+    if (owns_render_cache && pcc_metal_view == closing_render_view) {
+      for (int i = 0; i < 512; i++) {
+        pcc_text_layers[i] = nil;
+        pcc_text_fields[i] = nil;
+      }
+      for (int i = 0; i < 2; i++) {
+        pcc_panes[i] = nil;
+        pcc_pane_views[i] = nil;
+        pcc_pane_last[i] = nil;
+        pcc_pane_rulers[i] = nil;
+      }
+      pcc_metal_layer = nil;
+      pcc_metal_view = nil;
+      pcc_last_click = 0;
+    }
     CFRelease((__bridge CFTypeRef)win);
     return 0;
   }

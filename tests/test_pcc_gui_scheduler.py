@@ -54,7 +54,7 @@ def test_scheduler_has_one_package_owner_and_verified_reducer_abi() -> None:
         encoding="utf-8"
     )
     lowering = (
-        CORE_ROOT / "pcc" / "py_frontend" / "codegen" / "unsafe_lowering.py"
+        CORE_ROOT / "pcc" / "frontends" / "python" / "codegen" / "unsafe_lowering.py"
     ).read_text(encoding="utf-8")
     assert package.count("from . import pcc_gui_scheduler") == 1
     assert "UPDATE_SIZE = 64" in source

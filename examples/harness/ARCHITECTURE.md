@@ -72,8 +72,10 @@ Local secret files are owner-only and atomically replaced.
 - Cordis source is not embedded. Context inheritance, service realms, reactive
   Fiber activation, committed Provider bindings, dependency diagnostics,
   event modes and owned effects are reimplemented in Python over PCC runtime
-  facilities. Async effect iteration, declarative Loader reconciliation/HMR
-  and runtime-graph inspection remain separate migration tasks.
+  facilities. Declarative Loader reconciliation, explicit catalog hot
+  replacement and runtime-graph inspection are implemented; asynchronous
+  effect/Loader completion and automatic module-watcher HMR remain separate
+  migration tasks.
 - The React/Vite client is replaced by PCC's declarative native GUI.
 - Node worker threads are replaced by PCC virtual threads and structured
   task ownership.

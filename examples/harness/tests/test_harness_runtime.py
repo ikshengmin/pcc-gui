@@ -1,3 +1,5 @@
+import pytest
+
 from harness_runtime import HarnessRuntime, runtime_self_check
 
 
@@ -88,3 +90,28 @@ def test_runtime_fork_replaces_services_at_explicit_event_boundary(tmp_path):
         "assistant: PCC harness is running. You said: first",
     ]
     assert runtime.kernel.context.service_relationship("agent") == "child:100"
+
+
+def test_runtime_disposal_cancels_agent_and_releases_root_after_loader_error():
+    from loader_runtime import LoaderEntry
+
+    runtime = HarnessRuntime()
+    trace = []
+
+    def bad_cleanup():
+        trace.append("plugin-off")
+        raise RuntimeError("cleanup failed")
+
+    def plugin(scope, config):
+        scope.effect(lambda: bad_cleanup)
+
+    runtime.plugin_catalog.register("failing-cleanup", plugin)
+    runtime.loader.reconcile([LoaderEntry("failing-cleanup", "failing-cleanup")])
+    runtime.kernel.context.effect(lambda: lambda: trace.append("root-off"))
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        runtime.dispose()
+    assert trace == ["plugin-off", "root-off"]
+    assert runtime.agent.cancellation.cancelled
+    assert not runtime.kernel.context.active
+    runtime.dispose()
+    assert trace == ["plugin-off", "root-off"]

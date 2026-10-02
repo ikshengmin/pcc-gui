@@ -137,3 +137,36 @@ def test_current_pcc1_native_harness_gui() -> None:
         timeout=30,
     )
     assert "libpython" not in linkage.stdout.lower()
+
+
+@pytest.mark.integration
+def test_current_pcc1_native_harness_headless(
+    tmp_path: Path, pcc_py_runtime_archive: Path
+) -> None:
+    """Compile the production entrypoint and run its real CLI branch on Linux/Darwin.
+
+    No bridge build, archive rebuild, temporary app rewrite or host fallback.
+    Window/render acceptance remains in the separate Darwin integration gate.
+    """
+    env = dict(os.environ)
+    env.pop("LC_ALL", None)
+    env["PCC_RUNTIME_ARCHIVE"] = str(pcc_py_runtime_archive)
+    artifact = tmp_path / "harness-core"
+    built = subprocess.run(
+        [str(compiler_path()), "--backend", "self", "--python-libpython=off",
+         "--ir-scaffold=on", str(PROJECT / "app.py"), "-o", str(artifact)],
+        cwd=ROOT, env=env, text=True, capture_output=True, timeout=300,
+    )
+    assert built.returncode == 0, built.stdout + built.stderr
+    for arguments, marker in [
+        (["--self-check"], "HARNESS_RUNTIME_SELF_CHECK_OK"),
+        (["hello"], "assistant: PCC harness is running. You said: hello"),
+        (["/tool echo native pcc"], "assistant: Tool returned: native pcc"),
+    ]:
+        ran = subprocess.run([str(artifact), *arguments], cwd=tmp_path, env=env,
+                             text=True, capture_output=True, timeout=30)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        assert marker in ran.stdout
+    failed = subprocess.run([str(artifact), "--unknown-option"], cwd=tmp_path,
+                            env=env, text=True, capture_output=True, timeout=30)
+    assert failed.returncode != 0, failed.stdout + failed.stderr

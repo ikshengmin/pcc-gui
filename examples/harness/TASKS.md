@@ -1,8 +1,9 @@
 # Harness migration tasks
 
-The canonical machine-readable task state is
-`../../docs/goal/task-board.yaml`. This file is the project-local index for
-all `HARNESS-` rows. The inventory is exhaustive for upstream
+This is the historical package-domain coverage index, not current task state.
+Active work is tracked in the standalone pcc-gui and pcc issue trackers; the
+monorepo task board is retired. The `HARNESS-` references remain migration
+identifiers. The inventory covers upstream
 `deepseek-ai/deepseek-harness` commit
 `47f943859bef60e4160492346772ded9b24f765a` at package-domain level. A task
 may produce smaller implementation rows when its first source audit identifies

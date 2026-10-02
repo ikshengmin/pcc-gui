@@ -175,3 +175,4 @@ def test_native_window_handle_is_released_once(tmp_path: Path) -> None:
     ran = subprocess.run([str(exe)], capture_output=True, text=True, timeout=30)
     assert ran.returncode == 0, ran.stdout + ran.stderr
     assert "PCC_WINDOW_CLOSE_OWNERSHIP_OK cycles=3 retained_windows=0" in ran.stdout
+    assert "PCC_WINDOW_REOPEN_CACHE_OK stale_callbacks=0 retained_views=0" in ran.stdout

@@ -92,11 +92,11 @@ def test_command_owner_freezes_one_table_and_callback_abi() -> None:
     unsafe = (CORE_ROOT / "pcc" / "unsafe" / "__init__.py").read_text(
         encoding="utf-8"
     )
-    infer = (CORE_ROOT / "pcc" / "py_frontend" / "type_infer.py").read_text(
+    infer = (CORE_ROOT / "pcc" / "frontends" / "python" / "type_infer.py").read_text(
         encoding="utf-8"
     )
     lowering = (
-        CORE_ROOT / "pcc" / "py_frontend" / "codegen" / "unsafe_lowering.py"
+        CORE_ROOT / "pcc" / "frontends" / "python" / "codegen" / "unsafe_lowering.py"
     ).read_text(encoding="utf-8")
     assert package.count("from . import pcc_gui_commands") == 1
     assert package.count("from . import pcc_gui_binding") == 1

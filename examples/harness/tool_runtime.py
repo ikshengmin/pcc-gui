@@ -1,6 +1,10 @@
 """Tool definition/provider/consumer registry with execution policy hooks."""
 
 
+class OperationCancelled(RuntimeError):
+    """One shared model/tool operation was cooperatively cancelled."""
+
+
 class Cancellation:
     """Cooperative cancellation state shared across a tool execution."""
 
@@ -14,7 +18,7 @@ class Cancellation:
 
     def require_active(self) -> None:
         if self.cancelled:
-            raise RuntimeError("operation cancelled: " + self.reason)
+            raise OperationCancelled("operation cancelled: " + self.reason)
 
 
 class ToolSchema:

@@ -170,6 +170,7 @@ class HarnessRuntime:
         self._replace_session(Session(SessionHeader(session_id, created_at)))
 
     def _replace_session(self, session: Session) -> None:
+        self.agent.cancel("session replaced")
         self.agent_effect.dispose()
         self.session_effect.dispose()
         self.service_generation = (
@@ -189,8 +190,19 @@ class HarnessRuntime:
         )
 
     def dispose(self) -> None:
-        self.loader.dispose()
-        self.kernel.dispose()
+        self.agent.cancel("runtime disposed")
+        failure = None
+        try:
+            self.loader.dispose()
+        except Exception as error:
+            failure = error
+        try:
+            self.kernel.dispose()
+        except Exception as error:
+            if failure is None:
+                failure = error
+        if failure is not None:
+            raise failure
 
     def resolve_agent(self) -> AgentLoop:
         """Resolve the typed agent service from the root composition."""

@@ -17,4 +17,4 @@ def main() -> int:
     return run_cli(sys.argv)
 
 
-main()
+sys.exit(main())

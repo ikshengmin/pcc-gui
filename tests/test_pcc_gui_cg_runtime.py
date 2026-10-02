@@ -5,7 +5,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_coregraphics_framework_cache_is_defined_in_its_runtime_object(tmp_path):
-    from pcc.py_frontend.pipeline import compile_python
+    from pcc.frontends.python.pipeline import compile_python
 
     source = REPO_ROOT / "pcc_gui" / "pcc_gui_cg.py"
     output = tmp_path / "pcc_gui_cg.ll"

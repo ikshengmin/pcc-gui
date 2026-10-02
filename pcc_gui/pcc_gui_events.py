@@ -28,8 +28,10 @@ from pcc.unsafe import (
     int_to_ptr,
     load_i32,
     load_i64,
+    memcpy,
     ptr_is_null,
     ptr_to_int,
+    stack_alloc,
     store_i32,
     store_i64,
     store_ptr,
@@ -1162,17 +1164,31 @@ def pcc_gui_events_shutdown(error_out) -> int:
     _clear_error(error_out)
     if _base("pcc_gui_event_listeners") == 0:
         return OK
+    if _base("pcc_gui_event_state") != EVENTS_IDLE:
+        return _write_error(
+            error_out, ERR_INVALID_TRANSITION, PHASE_PASSIVE_CLEANUP, 0
+        )
     passive_cap = _base("pcc_gui_event_passive_capacity")
+    first_error = OK
     if passive_cap > 0:
-        status = pcc_gui_events_drain_passive(passive_cap, error_out)
-        if status < 0:
-            return status
+        # Ordinary drains stop at the first failed callback. Shutdown must
+        # still visit the remaining cleanup records and retire registrations.
+        scratch_error = stack_alloc(24)
+        attempted = 0
+        while attempted < passive_cap and _next_passive_index() >= 0:
+            status = pcc_gui_events_drain_passive(1, scratch_error)
+            if status < 0 and first_error == OK:
+                first_error = status
+                if not ptr_is_null(error_out):
+                    memcpy(error_out, scratch_error, 24)
+            attempted = attempted + 1
         # Cleanup callbacks are not allowed to create an unbounded shutdown
         # tail.  One full-capacity drain must empty the fixed arena.
         if _next_passive_index() >= 0:
-            return _write_error(
-                error_out, ERR_INVALID_TRANSITION, PHASE_PASSIVE_CLEANUP, 0
-            )
+            if first_error == OK:
+                first_error = _write_error(
+                    error_out, ERR_INVALID_TRANSITION, PHASE_PASSIVE_CLEANUP, 0
+                )
     cap = _base("pcc_gui_event_listener_capacity")
     i = 0
     while i < cap:
@@ -1186,4 +1202,5 @@ def pcc_gui_events_shutdown(error_out) -> int:
             _clear_effect(i)
         i = i + 1
     store_i64(global_addr("pcc_gui_event_state"), 0, EVENTS_IDLE)
-    return OK
+    store_i64(global_addr("pcc_gui_event_last_error"), 0, first_error)
+    return first_error
