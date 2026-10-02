@@ -27,6 +27,28 @@
       "default": "x=0, y=0 when the bit is absent; payload words are unchanged"
     }
   },
+  "kernel_text": {
+    "node_record_bytes": 208,
+    "text_pointer_offset": 120,
+    "text_byte_length_offset": 104,
+    "borrowed": {
+      "symbol": "pcc_kit_text",
+      "abi": "void(i64 node, i64 x, i64 y, ptr utf8, i64 byte_length, i64 font, i32 color)",
+      "ownership": "caller keeps source alive independently of node until replacement, type change, subtree destruction or successful reinitialization"
+    },
+    "copy": {
+      "symbol": "pcc_kit_text_copy",
+      "abi": "i32(i64 node, i64 x, i64 y, ptr utf8, i64 byte_length, i64 font, i32 color)",
+      "input": "readable UTF-8 bytes borrowed only for the call; byte_length 0..1317624576693539401; NULL allowed only for zero length; embedded NUL bytes are copied",
+      "storage": "nonempty input copied into a NUL-terminated raw allocation before return; zero length stores NULL; per-slot raw ownership table does not alter node layout or contain managed references",
+      "result": "0 success; -1 invalid/stale node, invalid byte length or NULL nonempty input; -2 allocation failure",
+      "failure": "node fields and previous ownership are unchanged",
+      "release": "exactly once on replacement, non-text kind change, subtree destruction or successful reinitialization; rect geometry updates and assigning text kind preserve ownership",
+      "aliasing": "copy completes before releasing previous owned storage; source may alias that storage",
+      "output_lifetime": "node/render text pointers are borrowed until replacement, non-text kind change, subtree destruction or successful reinitialization"
+    },
+    "reinitialization": "both raw arenas are reserved before retiring the old tree; invalid capacity or allocation failure preserves all current state"
+  },
   "records": [
     {
       "name": "PccGuiRenderContextV1",

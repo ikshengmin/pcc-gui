@@ -18,6 +18,10 @@ Node types: 0=container, 1=rect leaf, 2=text leaf, 3=scroll container.
 Layouts: 0=stack-v, 1=stack-h, 2=dock.
 Dock sides: 0=none, 1=left, 2=top, 3=right, 4=bottom, 5=fill.
 
+Text is either caller-borrowed (``pcc_kit_text``) or a raw kernel-owned UTF-8
+byte copy (``pcc_kit_text_copy``).  Owned allocations are tracked by slot in a
+separate raw pointer table; the frozen node record contains no managed roots.
+
 ``pcc_kit_route_event_v2`` only reports the complete leaf-to-root hit path.
 It never dispatches component callbacks.  ``pcc_kit_route_event`` is the
 explicit legacy compatibility wrapper that retains kernel-handler bubbling.
@@ -35,6 +39,7 @@ from pcc.unsafe import (
     int_to_ptr,
     load_i32,
     load_i64,
+    memcpy,
     ptr_is_null,
     ptr_to_int,
     stack_alloc,
@@ -52,6 +57,7 @@ DOCK_BOTTOM = 4
 DOCK_FILL = 5
 
 define_global_i64("pcc_kit_pool", 0)
+define_global_i64("pcc_kit_owned_text", 0)
 define_global_i64("pcc_kit_count", 0)
 define_global_i64("pcc_kit_live_count", 0)
 define_global_i64("pcc_kit_cap", 0)
@@ -113,6 +119,19 @@ def _valid(node_id: int) -> int:
     return 1
 
 
+def _release_owned_text(node_id: int) -> None:
+    owners = load_i64(global_addr("pcc_kit_owned_text"), 0)
+    if owners == 0:
+        return
+    owner_slot = int_to_ptr(owners + _slot(node_id) * 8)
+    owned = load_i64(owner_slot, 0)
+    if owned != 0:
+        store_i64(owner_slot, 0, 0)
+        _s8(node_id, 104, 0)
+        _s8(node_id, 120, 0)
+        free(int_to_ptr(owned))
+
+
 def _reset_slot(node_id: int, parent: int) -> None:
     _s8(node_id, 0, parent)
     _s8(node_id, 8, -1)
@@ -168,14 +187,27 @@ def _would_cycle(parent: int, child: int) -> int:
 def pcc_kit_init(cap: int) -> int:
     if cap <= 0 or cap > 8192:
         return -1
-    old_pool = load_i64(global_addr("pcc_kit_pool"), 0)
-    if old_pool != 0:
-        free(int_to_ptr(old_pool))
+    # Reserve both new arenas before retiring anything in the current tree.
     pool = calloc(cap * NODE_SIZE, 1)
     if ptr_is_null(pool):
-        store_i64(global_addr("pcc_kit_pool"), 0, 0)
         return -2
+    owners = calloc(cap * 8, 1)
+    if ptr_is_null(owners):
+        free(pool)
+        return -2
+    old_pool = load_i64(global_addr("pcc_kit_pool"), 0)
+    old_owners = load_i64(global_addr("pcc_kit_owned_text"), 0)
+    count = load_i64(global_addr("pcc_kit_count"), 0)
+    idx = 0
+    while idx < count:
+        _release_owned_text(idx)
+        idx = idx + 1
+    if old_owners != 0:
+        free(int_to_ptr(old_owners))
+    if old_pool != 0:
+        free(int_to_ptr(old_pool))
     store_i64(global_addr("pcc_kit_pool"), 0, ptr_to_int(pool))
+    store_i64(global_addr("pcc_kit_owned_text"), 0, ptr_to_int(owners))
     store_i64(global_addr("pcc_kit_cap"), 0, cap)
     store_i64(global_addr("pcc_kit_count"), 0, 0)
     store_i64(global_addr("pcc_kit_live_count"), 0, 0)
@@ -250,6 +282,8 @@ def pcc_kit_geometry_set(node_id: int, offset: int, value: int) -> None:
 def pcc_kit_node_kind(node_id: int, kind: int) -> int:
     if _valid(node_id) == 0 or kind < 0 or kind > 3:
         return -1
+    if kind != 2:
+        _release_owned_text(node_id)
     _s4(node_id, 88, kind)
     if kind == 3:
         _s4(node_id, 192, 1)
@@ -441,6 +475,7 @@ def _destroy_subtree(node_id: int) -> int:
     hook = load_i64(global_addr("pcc_kit_removal_hook"), 0)
     if hook != 0:
         call_i64_i64(int_to_ptr(hook), node_id)
+    _release_owned_text(node_id)
     idx = _slot(node_id)
     gen = _n8(node_id, 128) + 1
     if gen > 0x7FFFFFFF:
@@ -477,10 +512,7 @@ def pcc_kit_rect(node_id: int, x: int, y: int, w: int, h: int, color: int) -> No
     _s4(node_id, 92, color)
 
 
-@c_abi_typed_export("pcc_kit_text", "void", ("i64", "i64", "i64", "ptr", "i64", "i64", "i32"))
-def pcc_kit_text(node_id: int, x: int, y: int, text_ptr, tlen: int, font: int, color: int) -> None:
-    if _valid(node_id) == 0:
-        return
+def _set_text(node_id: int, x: int, y: int, text_ptr, tlen: int, font: int, color: int) -> None:
     _s8(node_id, 32, x)
     _s8(node_id, 40, y)
     _s8(node_id, 48, tlen * 7)
@@ -490,6 +522,48 @@ def pcc_kit_text(node_id: int, x: int, y: int, text_ptr, tlen: int, font: int, c
     _s8(node_id, 104, tlen)
     _s8(node_id, 112, font)
     _s8(node_id, 120, ptr_to_int(text_ptr))
+
+
+@c_abi_typed_export("pcc_kit_text", "void", ("i64", "i64", "i64", "ptr", "i64", "i64", "i32"))
+def pcc_kit_text(node_id: int, x: int, y: int, text_ptr, tlen: int, font: int, color: int) -> None:
+    """Borrow caller-owned bytes until replacement, type change or destruction.
+
+    The caller must keep this source alive independently of the node.  Use the
+    copy API for temporary input or input aliasing this node's owned text.
+    """
+    if _valid(node_id) == 0:
+        return
+    _release_owned_text(node_id)
+    _set_text(node_id, x, y, text_ptr, tlen, font, color)
+
+
+@c_abi_typed_export("pcc_kit_text_copy", "i32", ("i64", "i64", "i64", "ptr", "i64", "i64", "i32"))
+def pcc_kit_text_copy(node_id: int, x: int, y: int, text_ptr, tlen: int, font: int, color: int) -> int:
+    """Copy tlen UTF-8 bytes before returning; the source is only call-borrowed.
+
+    Return -1 for invalid node, invalid byte length or NULL nonempty input,
+    -2 for allocation failure, and 0 on success.  Errors leave the entire node
+    and its previous allocation unchanged.  The caller supplies readable bytes;
+    UTF-8 decoding/validation is the renderer's responsibility.
+    """
+    # Bound both the NUL-terminated allocation and the legacy width estimate.
+    if _valid(node_id) == 0 or tlen < 0 or tlen > 0x1249249249249249:
+        return -1
+    if tlen > 0 and ptr_is_null(text_ptr):
+        return -1
+    owned = 0
+    if tlen > 0:
+        copied = calloc(tlen + 1, 1)
+        if ptr_is_null(copied):
+            return -2
+        # Input may point into the old owned allocation: copy before release.
+        memcpy(copied, text_ptr, tlen)
+        owned = ptr_to_int(copied)
+    _release_owned_text(node_id)
+    owners = load_i64(global_addr("pcc_kit_owned_text"), 0)
+    store_i64(int_to_ptr(owners + _slot(node_id) * 8), 0, owned)
+    _set_text(node_id, x, y, int_to_ptr(owned), tlen, font, color)
+    return 0
 
 
 @c_abi_typed_export("pcc_kit_visible", "void", ("i64", "i32"))
@@ -585,6 +659,7 @@ def pcc_kit_clip_children(node_id: int, on: int) -> None:
 @c_abi_typed_export("pcc_kit_scroll_container", "void", ("i64", "i32"))
 def pcc_kit_scroll_container(node_id: int, on: int) -> None:
     if _valid(node_id) != 0:
+        _release_owned_text(node_id)
         _s4(node_id, 88, 3 if on != 0 else 0)
         _s4(node_id, 192, 1 if on != 0 else _n4(node_id, 192))
 
