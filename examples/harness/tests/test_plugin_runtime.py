@@ -179,4 +179,228 @@ def test_cleanup_cannot_register_a_new_effect_on_unloading_owner():
 
     assert len(errors) == 1
     assert "disposed" in errors[0]
-    assert len(scope.effects) == 1
+    assert scope.effects == []
+
+
+def test_disposal_unlinks_scopes_services_listeners_and_releases_resources():
+    import gc
+    import weakref
+
+    class Resource:
+        pass
+
+    kernel = PluginKernel()
+
+    def install_resource():
+        resource = Resource()
+        scope = kernel.context.child("owned")
+        scope.provide("resource", resource)
+        scope.on("resource", lambda payload: resource)
+        scope.effect(lambda: lambda: resource)
+        return weakref.ref(resource), weakref.ref(scope), scope
+
+    resource_ref, scope_ref, scope = install_resource()
+    scope.dispose()
+    assert kernel.context.children == []
+    assert kernel.context.service_registrations == []
+    assert kernel.context.event_registrations == []
+    assert scope.effects == []
+    del scope
+    gc.collect()
+    assert scope_ref() is None
+    assert resource_ref() is None
+
+
+def test_manual_effect_and_listener_disposal_release_owner_entries():
+    kernel = PluginKernel()
+    trace = []
+    effect = kernel.context.effect(lambda: lambda: trace.append("cleanup"))
+    listener = kernel.context.on("change", lambda payload: trace.append("event"))
+    service = kernel.context.provide("value", "service")
+
+    effect.dispose()
+    effect.dispose()
+    listener.dispose()
+    service.dispose()
+
+    assert trace == ["cleanup"]
+    assert effect.disposers == []
+    assert listener.callback is None
+    assert kernel.context.effects == []
+    assert kernel.context.service_registrations == []
+    assert kernel.context.event_registrations == []
+
+
+def test_repeated_loader_replacement_keeps_only_live_registry_entries():
+    from loader_runtime import LoaderEntry, PluginCatalog, PluginLoader
+
+    kernel = PluginKernel()
+    catalog = PluginCatalog()
+    closed = []
+
+    def plugin(scope, config):
+        generation = config["generation"]
+        scope.effect(lambda: lambda: closed.append(generation))
+        scope.provide("value", generation)
+        scope.on("change", lambda payload: generation)
+
+    catalog.register("resource", plugin)
+    loader = PluginLoader(kernel, catalog)
+    for generation in range(25):
+        loader.reconcile([LoaderEntry("group", group=True, children=[
+            LoaderEntry("resource", "resource", {"generation": generation}),
+        ])])
+        assert len(kernel.context.children) == 1
+        group = kernel.context.children[0]
+        assert len(group.children) == 1
+        assert len(kernel.context.service_registrations) == 1
+        assert len(kernel.context.event_registrations) == 1
+        assert group.children[0].get("value") == generation
+        assert closed == list(range(generation))
+    loader.dispose()
+    assert closed == list(range(25))
+    assert kernel.context.children == []
+    assert kernel.context.service_registrations == []
+    assert kernel.context.event_registrations == []
+
+
+def test_failed_plugin_setup_leaves_no_retired_registry_entries():
+    kernel = PluginKernel()
+    closed = []
+
+    def broken(scope):
+        scope.effect(lambda: lambda: closed.append("resource"))
+        scope.provide("partial", object())
+        scope.on("partial", lambda payload: None)
+        raise RuntimeError("setup failed")
+
+    for attempt in range(10):
+        with pytest.raises(RuntimeError, match="setup failed"):
+            kernel.install("broken", broken)
+        assert kernel.installed_plugins() == []
+        assert kernel.context.children == []
+        assert kernel.context.effects == []
+        assert kernel.context.service_registrations == []
+        assert kernel.context.event_registrations == []
+    assert closed == ["resource"] * 10
+
+
+def test_cleanup_failure_still_unlinks_every_child_and_registration():
+    kernel = PluginKernel()
+    parent = kernel.context.child("parent")
+    child = parent.child("child")
+    trace = []
+
+    def fail():
+        trace.append("failure")
+        raise RuntimeError("cleanup failed")
+
+    parent.effect(lambda: lambda: trace.append("parent"))
+    child.provide("value", "old")
+    child.on("change", lambda payload: None)
+    effect = child.effect(lambda: [lambda: trace.append("first"), fail])
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        parent.dispose()
+
+    assert trace == ["failure", "first", "parent"]
+    assert parent.children == []
+    assert parent.effects == child.effects == effect.disposers == []
+    assert kernel.context.children == []
+    assert kernel.context.service_registrations == []
+    assert kernel.context.event_registrations == []
+    parent.dispose()
+    assert trace == ["failure", "first", "parent"]
+
+
+def test_reentrant_sibling_disposal_does_not_skip_child_cleanup():
+    kernel = PluginKernel()
+    left = kernel.context.child("left")
+    middle = kernel.context.child("middle")
+    right = kernel.context.child("right")
+    trace = []
+    left.effect(lambda: lambda: trace.append("left"))
+    middle.effect(lambda: lambda: trace.append("middle"))
+
+    def right_cleanup():
+        trace.append("right")
+        left.dispose()
+
+    right.effect(lambda: right_cleanup)
+    kernel.dispose()
+    assert trace == ["right", "left", "middle"]
+    assert kernel.context.children == []
+
+
+def test_provider_withdrawal_preserves_committed_value_until_consumer_cleanup():
+    kernel = PluginKernel()
+    trace = []
+
+    def provider(scope):
+        scope.effect(lambda: lambda: trace.append("provider-close"))
+        scope.provide("value", "usable")
+
+    def consumer(scope):
+        scope.effect(lambda: lambda: trace.append("consumer:" + scope.require("value")))
+
+    kernel.install("provider", provider)
+    kernel.install("consumer", consumer, inject=["value"])
+    kernel.unload("provider")
+    assert trace == ["consumer:usable", "provider-close"]
+    assert kernel.plugin_state("consumer") == "PENDING"
+    assert kernel.context.children == []
+    assert kernel.context.service_registrations == []
+    kernel.dispose()
+
+
+def test_reentrant_withdrawal_keeps_value_until_deferred_kernel_reconciliation():
+    kernel = PluginKernel()
+    value = kernel.context.provide("value", "usable")
+    trace = []
+
+    def consumer(scope):
+        trace.append("start:" + scope.require("value"))
+        scope.effect(lambda: lambda: trace.append("cleanup:" + scope.require("value")))
+        value.dispose()
+
+    kernel.install("consumer", consumer, inject=["value", "trigger"])
+    trigger = kernel.context.provide("trigger", True)
+    assert trace == ["start:usable", "cleanup:usable"]
+    assert kernel.plugin_state("consumer") == "PENDING"
+    assert kernel.context.service_registrations == [trigger]
+    assert kernel.context.children == []
+    kernel.dispose()
+
+
+@pytest.mark.parametrize("mode", ["emit", "parallel", "serial", "bail", "waterfall"])
+def test_unregistration_preserves_inflight_dispatch_snapshot(mode):
+    kernel = PluginKernel()
+    trace = []
+    holders = []
+
+    def first(payload):
+        trace.append("first")
+        holders[0].dispose()
+
+    def second(payload):
+        trace.append("second")
+
+    def first_waterfall(payload, next_):
+        first(payload)
+        return next_()
+
+    def second_waterfall(payload, next_):
+        second(payload)
+        return next_()
+
+    listener = kernel.context.on("change", first_waterfall if mode == "waterfall" else first, mode)
+    holders.append(kernel.context.on("change", second_waterfall if mode == "waterfall" else second, mode))
+    if mode == "waterfall":
+        kernel.context.waterfall("change", None, lambda payload: trace.append("terminal"))
+        assert trace == ["first", "second", "terminal"]
+    else:
+        getattr(kernel.context, mode)("change", None)
+        assert trace == ["first", "second"]
+    assert holders[0].callback is None
+    assert kernel.context.event_registrations == [listener]
+    listener.dispose()
+    assert kernel.context.effects == kernel.context.event_registrations == []

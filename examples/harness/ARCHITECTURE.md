@@ -72,8 +72,14 @@ Local secret files are owner-only and atomically replaced.
 - Cordis source is not embedded. Context inheritance, service realms, reactive
   Fiber activation, committed Provider bindings, dependency diagnostics,
   event modes and owned effects are reimplemented in Python over PCC runtime
-  facilities. Declarative Loader reconciliation, explicit catalog hot
-  replacement and runtime-graph inspection are implemented; asynchronous
+  facilities. Declarative Loader reconciliation preserves unchanged entry
+  identities across reordering and selective replacement. Owned descendants
+  and static dependents restart with a changed mount; service-dependent fiber
+  transitions remain kernel-owned. Disposal removes retired scopes and
+  registrations from live owners while committed service bindings survive
+  consumer cleanup. Event dispatch retains its selected callbacks if a listener
+  is unregistered during that dispatch. Explicit catalog hot replacement and
+  runtime-graph inspection are implemented; asynchronous
   effect/Loader completion and automatic module-watcher HMR remain separate
   migration tasks.
 - The React/Vite client is replaced by PCC's declarative native GUI.

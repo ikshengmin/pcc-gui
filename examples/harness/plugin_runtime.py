@@ -116,19 +116,33 @@ class Effect:
             return
         self.active = False
         if self.kind == "service":
-            self.owner.root._service_changed(self.name, self.realm)
+            self.owner.root._remove_registration(self)
+            try:
+                # Consumers may still hold this registration as a committed
+                # binding while their teardown waits for graph reconciliation.
+                # Its value must outlive public withdrawal.
+                self.owner.root._service_changed(self.name, self.realm)
+            finally:
+                self.owner._remove_effect(self)
             return
         if self.kind == "event":
+            self.owner.root._remove_registration(self)
+            self.owner._remove_effect(self)
+            self.callback = None
             return
+        disposers = self.disposers
+        self.disposers = []
         first_failure = None
-        i = len(self.disposers) - 1
+        i = len(disposers) - 1
         while i >= 0:
             try:
-                self.disposers[i]()
+                disposers[i]()
             except Exception as error:
                 if first_failure is None:
                     first_failure = error
             i -= 1
+        if self.owner is not None:
+            self.owner._remove_effect(self)
         if first_failure is not None:
             raise first_failure
 
@@ -373,7 +387,7 @@ class PluginContext:
         listeners = self._listeners(event_name, "emit")
         i = 0
         while i < len(listeners):
-            listeners[i].callback(payload)
+            listeners[i](payload)
             i += 1
 
     def parallel(self, event_name: str, payload) -> None:
@@ -383,7 +397,7 @@ class PluginContext:
         i = 0
         while i < len(listeners):
             try:
-                listeners[i].callback(payload)
+                listeners[i](payload)
             except Exception as error:
                 failures.append(error)
             i += 1
@@ -412,7 +426,7 @@ class PluginContext:
                 listeners, index + 1, next_payload, terminal
             )
 
-        return listeners[index].callback(payload, next_listener)
+        return listeners[index](payload, next_listener)
 
     def dispose(self) -> None:
         """Retire descendants and effects while continuing after cleanup errors."""
@@ -420,32 +434,50 @@ class PluginContext:
             return
         self.disposing = True
         first_failure = None
-        i = len(self.children) - 1
+        children = self.children.copy()
+        i = len(children) - 1
         while i >= 0:
             try:
-                self.children[i].dispose()
+                children[i].dispose()
             except Exception as error:
                 if first_failure is None:
                     first_failure = error
             i -= 1
-        i = len(self.effects) - 1
+        effects = self.effects.copy()
+        i = len(effects) - 1
         while i >= 0:
             try:
-                self.effects[i].dispose()
+                effects[i].dispose()
             except Exception as error:
                 if first_failure is None:
                     first_failure = error
             i -= 1
+        self.children = []
+        self.effects = []
         self.active = False
         self.disposing = False
+        if self.parent is not None:
+            self.parent._remove_child(self)
         if first_failure is not None:
             raise first_failure
 
     def _remove_effect(self, target) -> None:
+        self._remove_identity(self.effects, target)
+
+    def _remove_child(self, target) -> None:
+        self._remove_identity(self.children, target)
+
+    def _remove_registration(self, target) -> None:
+        if target.kind == "service":
+            self._remove_identity(self.service_registrations, target)
+        else:
+            self._remove_identity(self.event_registrations, target)
+
+    def _remove_identity(self, values, target) -> None:
         i = 0
-        while i < len(self.effects):
-            if self.effects[i] is target:
-                self.effects.pop(i)
+        while i < len(values):
+            if values[i] is target:
+                values.pop(i)
                 return
             i += 1
 
@@ -453,7 +485,7 @@ class PluginContext:
         listeners = self._listeners(event_name, mode)
         i = 0
         while i < len(listeners):
-            result = listeners[i].callback(payload)
+            result = listeners[i](payload)
             if result is not None and result is not False:
                 return result
             i += 1
@@ -474,7 +506,10 @@ class PluginContext:
                     or self._is_descendant_of(registration.owner)
                 )
             ):
-                listeners.append(registration)
+                # Dispatch owns its callback snapshot. Unregistering a later
+                # listener releases its registry entry without changing the
+                # already selected dispatch sequence.
+                listeners.append(registration.callback)
             i += 1
         return listeners
 
@@ -1024,7 +1059,7 @@ class PluginKernel:
         return context._find_registration(name, False)
 
     def _publish_scope_services(self, scope) -> None:
-        registrations = self.context.service_registrations
+        registrations = self.context.service_registrations.copy()
         i = 0
         while i < len(registrations):
             registration = registrations[i]

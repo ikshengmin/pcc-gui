@@ -115,3 +115,27 @@ def test_runtime_disposal_cancels_agent_and_releases_root_after_loader_error():
     assert not runtime.kernel.context.active
     runtime.dispose()
     assert trace == ["plugin-off", "root-off"]
+
+
+def test_repeated_session_replacement_releases_old_agent_and_session_roots():
+    import gc
+    import weakref
+
+    runtime = HarnessRuntime()
+    service_count = len(runtime.kernel.context.service_registrations)
+    effect_count = len(runtime.kernel.context.effects)
+    for index in range(20):
+        old_session = weakref.ref(runtime.session)
+        old_agent = weakref.ref(runtime.agent)
+        runtime.new_session("session-" + str(index), index)
+        assert len(runtime.kernel.context.service_registrations) == service_count
+        assert len(runtime.kernel.context.effects) == effect_count
+        gc.collect()
+        assert old_agent() is None
+        assert old_session() is None
+    assert runtime.resolve_agent() is runtime.agent
+    assert runtime.resolve_session() is runtime.session
+    runtime.dispose()
+    assert runtime.kernel.context.children == []
+    assert runtime.kernel.context.effects == []
+    assert runtime.kernel.context.service_registrations == []

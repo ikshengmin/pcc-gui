@@ -47,11 +47,16 @@ complete Web UI parity yet.
 The runtime now also includes a reactive Cordis-style Fiber graph with pending
 Consumers, scoped service realms, Provider-identity reload, committed teardown
 bindings, dependency diagnostics, five event dispatch modes and reversible
-effects. Session state uses atomic JSONL persistence; settings are revisioned
+effects. Disposal unlinks retired scopes and registrations, drains cleanup
+captures, and retains committed service values through dependent teardown.
+Session state uses atomic JSONL persistence; settings are revisioned
 and atomically persisted; credential references stay secret-safe; anonymous
 identity, whole-list `todo_write`, and logged plan mode are assembled into the
-same runtime. Declarative Loader updates now snapshot configuration and support
-explicit catalog hot replacement with rollback to the previous implementation.
+same runtime. Declarative Loader updates snapshot configuration, preserve
+unchanged keyed mounts across edits/reordering, and support explicit catalog hot
+replacement with rollback to the previous implementation. Group ownership and
+static dependencies determine which additional mounts must restart;
+service-driven consumers remain owned by the reactive kernel.
 The DeepSeek adapter preserves indexed tool calls, reasoning and tool-result
 history, publishes live deltas into the session log, and propagates cancellation
 through its streaming transport contract. These paths have deterministic host

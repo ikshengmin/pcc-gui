@@ -391,3 +391,294 @@ def test_failed_old_cleanup_does_not_leave_phantom_committed_entries():
     assert trace == ["on:one", "off", "on:one"]
     with pytest.raises(RuntimeError, match="old cleanup failed"):
         loader.dispose()
+
+
+def _tracked_loader():
+    kernel = PluginKernel()
+    catalog = PluginCatalog()
+    trace = []
+
+    def tracked(scope, config):
+        label = config["label"]
+        trace.append("on:" + label)
+        scope.effect(lambda: lambda: trace.append("off:" + label))
+        if config.get("fail", False):
+            raise RuntimeError("bad replacement")
+
+    catalog.register("tracked", tracked)
+    return kernel, catalog, PluginLoader(kernel, catalog), trace
+
+
+def _tracked_entry(name, label=None, **options):
+    return LoaderEntry(name, "tracked", {"label": name if label is None else label}, **options)
+
+
+def test_keyed_edit_preserves_unrelated_later_scope_and_effects():
+    kernel, catalog, loader, trace = _tracked_loader()
+    first = _tracked_entry("first")
+    later = _tracked_entry("later")
+    loader.reconcile([first, later])
+    stable = loader.records[1]
+    stable_scope = stable.context
+
+    loader.reconcile([_tracked_entry("first", "changed"), later])
+
+    assert loader.records[1] is stable
+    assert stable.context is stable_scope
+    assert stable_scope.active
+    assert trace == ["on:first", "on:later", "off:first", "on:changed"]
+    loader.dispose()
+    assert trace[-2:] == ["off:later", "off:changed"]
+
+
+def test_prepend_remove_and_reorder_keep_existing_keyed_instances():
+    kernel, catalog, loader, trace = _tracked_loader()
+    first = _tracked_entry("first")
+    later = _tracked_entry("later")
+    loader.reconcile([first, later])
+    first_record, later_record = loader.records
+
+    loader.reconcile([_tracked_entry("new"), later, first])
+    assert loader.mounted_entries() == ["new", "later", "first"]
+    assert loader.records[1] is later_record
+    assert loader.records[2] is first_record
+    assert trace == ["on:first", "on:later", "on:new"]
+
+    loader.reconcile([later, first])
+    assert loader.records == [later_record, first_record]
+    assert trace == ["on:first", "on:later", "on:new", "off:new"]
+    loader.dispose()
+    loader.dispose()
+    assert trace[-2:] == ["off:first", "off:later"]
+
+
+def test_group_replacement_restarts_descendants_but_not_other_group():
+    kernel, catalog, loader, trace = _tracked_loader()
+    child = _tracked_entry("child")
+    first = LoaderEntry("first", group=True, children=[child],
+                        isolate_names=["service"], isolate_realms=["one"])
+    other = LoaderEntry("other", group=True, children=[_tracked_entry("unrelated")])
+    loader.reconcile([first, other])
+    old_group, old_child, stable_group, stable_child = loader.records
+
+    replacement = LoaderEntry("first", group=True, children=[child],
+                              isolate_names=["service"], isolate_realms=["two"])
+    loader.reconcile([replacement, other])
+
+    assert loader.records[2:] == [stable_group, stable_child]
+    assert old_group.context is None
+    assert old_child.context is None
+    assert loader.records[1].context.service_realm("service") == "two"
+    assert trace == ["on:child", "on:unrelated", "off:child", "on:child"]
+    loader.dispose()
+
+
+def test_moving_child_changes_parent_without_restarting_other_entries():
+    kernel, catalog, loader, trace = _tracked_loader()
+    child = _tracked_entry("child")
+    left = LoaderEntry("left", group=True, children=[child])
+    right = LoaderEntry("right", group=True, children=[_tracked_entry("stable")])
+    loader.reconcile([left, right])
+    left_record, old_child, right_record, stable_record = loader.records
+    previous_scope = old_child.context
+
+    loader.reconcile([
+        LoaderEntry("left", group=True),
+        LoaderEntry("right", group=True, children=[child, _tracked_entry("stable")]),
+    ])
+
+    assert loader.records[0] is left_record
+    assert loader.records[1] is right_record
+    assert loader.records[3] is stable_record
+    assert loader.records[2].context.parent is right_record.context
+    assert not previous_scope.active
+    assert trace == ["on:child", "on:stable", "off:child", "on:child"]
+    loader.dispose()
+
+
+def test_static_dependency_restart_closure_excludes_unrelated_entries():
+    kernel, catalog, loader, trace = _tracked_loader()
+    entries = [
+        _tracked_entry("base"),
+        _tracked_entry("middle", requires=["base"]),
+        _tracked_entry("leaf", requires=["middle"]),
+        _tracked_entry("stable"),
+    ]
+    loader.reconcile(entries)
+    stable = loader.records[3]
+
+    loader.reconcile([_tracked_entry("base", "new-base"), *entries[1:]])
+
+    assert loader.records[3] is stable
+    assert trace == [
+        "on:base", "on:middle", "on:leaf", "on:stable",
+        "off:leaf", "off:middle", "off:base",
+        "on:new-base", "on:middle", "on:leaf",
+    ]
+    loader.dispose()
+
+
+def test_hot_replacement_keeps_injected_fiber_and_unrelated_scope():
+    kernel, catalog, loader, trace = _tracked_loader()
+
+    def provider(scope, config):
+        scope.provide("value", "old")
+
+    def consumer(scope, config):
+        value = scope.require("value", "consumer")
+        trace.append("consume:" + value)
+        scope.effect(lambda: lambda: trace.append("release:" + value))
+
+    catalog.register("provider", provider)
+    catalog.register("consumer", consumer)
+    entries = [LoaderEntry("provider", "provider", provides=["value"]),
+               LoaderEntry("consumer", "consumer", inject=["value"]),
+               _tracked_entry("stable")]
+    loader.reconcile(entries)
+    consumer_record, stable_record = loader.records[1:]
+    consumer_fiber = next(fiber for fiber in kernel.plugin_fibers if fiber.name == "consumer")
+    catalog.replace("provider", lambda scope, config: scope.provide("value", "new"))
+
+    loader.reconcile(entries)
+
+    assert loader.records[1:] == [consumer_record, stable_record]
+    assert next(fiber for fiber in kernel.plugin_fibers if fiber.name == "consumer") is consumer_fiber
+    assert trace == ["consume:old", "on:stable", "release:old", "consume:new"]
+    loader.dispose()
+
+
+def test_failed_keyed_update_restores_old_order_and_keeps_unaffected_mount():
+    kernel, catalog, loader, trace = _tracked_loader()
+    first, stable, last = [_tracked_entry(name) for name in ["first", "stable", "last"]]
+    loader.reconcile([first, stable, last])
+    stable_record = loader.records[1]
+    broken = LoaderEntry("last", "tracked", {"label": "broken", "fail": True})
+
+    with pytest.raises(RuntimeError, match="bad replacement"):
+        loader.reconcile([stable, _tracked_entry("first", "changed"), _tracked_entry("new"), broken])
+
+    assert loader.mounted_entries() == ["first", "stable", "last"]
+    assert loader.records[1] is stable_record
+    assert stable_record.context.active
+    assert trace == [
+        "on:first", "on:stable", "on:last", "off:last", "off:first",
+        "on:changed", "on:new", "on:broken", "off:broken", "off:new", "off:changed",
+        "on:first", "on:last",
+    ]
+    loader.dispose()
+
+
+def test_cleanup_failure_retires_only_affected_records_before_retry():
+    kernel, catalog, loader, trace = _tracked_loader()
+    cleanup_calls = []
+
+    def cleanup():
+        cleanup_calls.append("off")
+        if len(cleanup_calls) == 1:
+            raise RuntimeError("cleanup failed once")
+
+    def fragile(scope, config):
+        scope.effect(lambda: cleanup)
+
+    catalog.register("fragile", fragile)
+    first = LoaderEntry("first", "fragile")
+    stable = _tracked_entry("stable")
+    loader.reconcile([first, stable])
+    stable_record = loader.records[1]
+    changed = LoaderEntry("first", "fragile", {"revision": 2})
+
+    with pytest.raises(RuntimeError, match="cleanup failed once"):
+        loader.reconcile([changed, stable])
+    assert loader.records == [stable_record]
+    assert kernel.installed_plugins() == ["stable"]
+    assert trace == ["on:stable"]
+
+    loader.reconcile([first, stable])
+    assert loader.records[1] is stable_record
+    assert loader.mounted_entries() == ["first", "stable"]
+    loader.dispose()
+    assert cleanup_calls == ["off", "off"]
+
+
+def test_disabling_group_preserves_unrelated_later_mount():
+    kernel, catalog, loader, trace = _tracked_loader()
+    group = LoaderEntry("group", group=True, children=[_tracked_entry("child")])
+    stable = _tracked_entry("stable")
+    loader.reconcile([group, stable])
+    stable_record = loader.records[2]
+
+    group.disabled = True
+    loader.reconcile([group, stable])
+    assert loader.records == [stable_record]
+    assert trace == ["on:child", "on:stable", "off:child"]
+    group.disabled = False
+    loader.reconcile([group, stable])
+    assert loader.records[2] is stable_record
+    assert trace == ["on:child", "on:stable", "off:child", "on:child"]
+    loader.dispose()
+
+
+def test_rollback_failure_still_restores_independent_changed_entries():
+    kernel, catalog, loader, trace = _tracked_loader()
+    attempts = []
+
+    def once(scope, config):
+        attempts.append(config["label"])
+        if len(attempts) > 1:
+            raise RuntimeError("old plugin cannot restart")
+
+    catalog.register("once", once)
+    first = LoaderEntry("first", "once", {"label": "original"})
+    stable, last = _tracked_entry("stable"), _tracked_entry("last")
+    loader.reconcile([first, stable, last])
+    stable_record = loader.records[1]
+
+    with pytest.raises(RuntimeError, match="rollback did not restore the tree"):
+        loader.reconcile([
+            LoaderEntry("first", "once", {"label": "candidate"}), stable,
+            _tracked_entry("last", "changed"),
+        ])
+
+    assert loader.mounted_entries() == ["stable", "last"]
+    assert loader.records[0] is stable_record
+    assert kernel.plugin_state("first") == "ABSENT"
+    assert kernel.plugin_state("last") == "ACTIVE"
+    assert attempts == ["original", "candidate", "original"]
+    assert trace == ["on:stable", "on:last", "off:last", "on:last"]
+    loader.dispose()
+
+
+def test_candidate_cleanup_failure_is_reported_after_restoring_old_tree():
+    kernel, catalog, loader, trace = _tracked_loader()
+
+    def cleanup():
+        raise RuntimeError("candidate cleanup broke")
+
+    def candidate(scope, config):
+        scope.effect(lambda: cleanup)
+
+    catalog.register("candidate", candidate)
+    first, stable = _tracked_entry("first"), _tracked_entry("stable")
+    loader.reconcile([first, stable])
+    stable_record = loader.records[1]
+
+    with pytest.raises(RuntimeError, match="candidate cleanup broke"):
+        loader.reconcile([
+            LoaderEntry("first", "candidate"), stable,
+            LoaderEntry("broken", "tracked", {"label": "broken", "fail": True}),
+        ])
+
+    assert loader.mounted_entries() == ["first", "stable"]
+    assert loader.records[1] is stable_record
+    assert trace == ["on:first", "on:stable", "off:first", "on:broken", "off:broken", "on:first"]
+    loader.dispose()
+
+
+def test_native_loader_workload_host_oracle(capsys):
+    from pathlib import Path
+    import runpy
+
+    source = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "harness_loader_keyed.py"
+    workload = runpy.run_path(str(source))
+    assert workload["main"]() == 0
+    assert capsys.readouterr().out == "HARNESS_KEYED_LOADER_OK\n"

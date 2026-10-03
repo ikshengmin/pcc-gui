@@ -394,39 +394,53 @@ class PluginLoader:
         self.records = []
 
     def reconcile(self, entries) -> None:
-        """Apply one desired tree or restore the previous stable suffix."""
+        """Keep unchanged keyed mounts and restore changed entries on failure."""
         desired = self._prepare(entries)
-        prefix = self._common_prefix(self.records, desired)
-        old_suffix = self.records[prefix:]
-        failure = self._unmount(old_suffix)
-        # Every suffix record was visited and retired even if cleanup failed.
-        # Leaving those records in the committed list makes an identical retry
-        # compare equal and silently skip mounting its now-missing resources.
-        self.records = self.records[:prefix]
+        previous = self.records.copy()
+        retired = self._changed_records(previous, desired)
+        retained = []
+        for record in previous:
+            if self._find_record(retired, record.entry.entry_id) is None:
+                retained.append(record)
+        failure = self._unmount(retired)
+        # Cleanup retires all selected records even when a disposer fails.
+        # A retry must never mistake an unmounted record for a live instance.
+        self.records = retained.copy()
         if failure is not None:
             raise failure
         installed = []
+        committed = []
         try:
-            i = prefix
+            i = 0
             while i < len(desired):
                 record = desired[i]
-                self._mount(record)
-                self.records.append(record)
-                installed.append(record)
+                existing = self._record(record.entry.entry_id)
+                if existing is None:
+                    self._mount(record)
+                    self.records.append(record)
+                    installed.append(record)
+                    committed.append(record)
+                else:
+                    committed.append(existing)
                 i += 1
         except Exception as error:
-            self._unmount(installed)
-            self.records = self.records[:prefix]
+            cleanup_failure = self._unmount(installed)
+            self.records = retained.copy()
             rollback_failure = None
             i = 0
-            while i < len(old_suffix):
+            while i < len(retired):
                 try:
-                    self._mount(old_suffix[i])
-                    self.records.append(old_suffix[i])
+                    self._mount(retired[i])
+                    self.records.append(retired[i])
                 except Exception as rollback_error:
-                    rollback_failure = rollback_error
-                    break
+                    if rollback_failure is None:
+                        rollback_failure = rollback_error
                 i += 1
+            restored = []
+            for record in previous:
+                if self._record(record.entry.entry_id) is not None:
+                    restored.append(record)
+            self.records = restored
             if rollback_failure is not None:
                 raise RuntimeError(
                     "loader update failed and rollback did not restore the tree: "
@@ -434,7 +448,15 @@ class PluginLoader:
                     + "; rollback: "
                     + str(rollback_failure)
                 )
+            if cleanup_failure is not None:
+                raise RuntimeError(
+                    "loader update failed and candidate cleanup failed: "
+                    + str(error)
+                    + "; cleanup: "
+                    + str(cleanup_failure)
+                )
             raise error
+        self.records = committed
 
     def dispose(self) -> None:
         failure = self._unmount(self.records)
@@ -612,23 +634,43 @@ class PluginLoader:
         return first_failure
 
     def _record(self, entry_id: str):
+        return self._find_record(self.records, entry_id)
+
+    def _find_record(self, records, entry_id: str):
         i = 0
-        while i < len(self.records):
-            if self.records[i].entry.entry_id == entry_id:
-                return self.records[i]
+        while i < len(records):
+            if records[i].entry.entry_id == entry_id:
+                return records[i]
             i += 1
         return None
 
-    def _common_prefix(self, current, desired) -> int:
-        limit = len(current)
-        if len(desired) < limit:
-            limit = len(desired)
-        i = 0
-        while i < limit:
-            if current[i].signature() != desired[i].signature():
-                return i
-            i += 1
-        return limit
+    def _changed_records(self, current, desired):
+        """Select changed ids and their owning-group/static-dependency closure."""
+        changed = []
+        for record in current:
+            replacement = self._find_record(desired, record.entry.entry_id)
+            if replacement is None or record.signature() != replacement.signature():
+                changed.append(record.entry.entry_id)
+        # Dynamic service consumers keep their fiber identity. The kernel
+        # withdraws and restores their effects when provider identities change.
+        expanded = True
+        while expanded:
+            expanded = False
+            for record in current:
+                if self._contains(changed, record.entry.entry_id):
+                    continue
+                affected = self._contains(changed, record.parent_id)
+                for dependency in record.entry.requires:
+                    if self._contains(changed, dependency):
+                        affected = True
+                if affected:
+                    changed.append(record.entry.entry_id)
+                    expanded = True
+        retired = []
+        for record in current:
+            if self._contains(changed, record.entry.entry_id):
+                retired.append(record)
+        return retired
 
     def _contains(self, values, target: str) -> bool:
         i = 0
