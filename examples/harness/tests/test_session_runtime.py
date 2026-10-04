@@ -176,3 +176,101 @@ def test_session_stats_ignore_partial_steps_prune_calls_and_clamp_clock_skew():
     assert stats.tool_ms == 0
     assert stats.ttft_steps == 0
     assert stats.decode_tokens == 0
+
+
+def test_event_observer_failures_do_not_reject_committed_append(capsys):
+    session = new_session()
+    heard = []
+
+    def broken(current, event):
+        assert current.events[-1] is event
+        raise ValueError("observer unavailable")
+
+    session.on_event(broken)
+    session.on_event(lambda current, event: heard.append(event))
+    first = session.append("user/message", "committed")
+    second = session.append("assistant/message", "still usable")
+
+    assert heard == [first, second]
+    assert session.events == [first, second]
+    assert [event.sequence for event in session.events] == [1, 2]
+    assert session.derive_model_history() == [
+        "user: committed", "assistant: still usable"
+    ]
+    assert capsys.readouterr().err.count("session/event listener threw: observer unavailable") == 2
+
+
+def test_reentrant_observer_append_preserves_publication_order(capsys):
+    session = new_session()
+    heard = []
+
+    def reenter(current, event):
+        if event.event_type == "user/message":
+            current.append("todo/write", "[]")
+
+    session.on_event(reenter)
+    session.on_event(lambda current, event: heard.append(event))
+    first = session.append("user/message", "outer")
+
+    assert session.events == [first]
+    assert heard == [first]
+    assert session.next_sequence == 2
+    assert "cannot reenter while another append is being published" in capsys.readouterr().err
+    second = session.append("assistant/message", "later")
+    assert heard == [first, second]
+    assert second.sequence == 2
+
+
+@pytest.mark.parametrize("operation", ["start_turn", "start_step", "end_step", "end_turn"])
+def test_observer_cannot_mutate_lifecycle_before_reentrant_append(operation, capsys):
+    session = new_session()
+    if operation != "start_turn":
+        session.start_turn()
+    if operation == "end_step":
+        session.start_step()
+    before = (session.active_turn, session.active_step, session.next_turn)
+    heard = []
+
+    def reenter(current, event):
+        if event.event_type == "user/message":
+            if operation == "end_turn":
+                current.end_turn("completed")
+            else:
+                getattr(current, operation)()
+
+    session.on_event(reenter)
+    session.on_event(lambda current, event: heard.append(event))
+    first = session.append("user/message", "outer")
+
+    assert (session.active_turn, session.active_step, session.next_turn) == before
+    assert heard == [first]
+    assert session.events[-1] is first
+    assert "cannot reenter while another append is being published" in capsys.readouterr().err
+
+
+def test_failed_append_validation_releases_publication_guard():
+    session = new_session()
+    with pytest.raises(ValueError, match="unknown required"):
+        session.append("invalid/event")
+    event = session.append("user/message", "valid")
+    assert session.events == [event]
+    assert event.sequence == 1
+
+
+def test_event_publication_uses_snapshot_of_registered_observers():
+    session = new_session()
+    heard = []
+
+    def later(current, event):
+        heard.append(("later", event.sequence))
+
+    def first(current, event):
+        heard.append(("first", event.sequence))
+        if event.sequence == 1:
+            current.on_event(later)
+
+    session.on_event(first)
+    session.append("user/message", "one")
+    assert heard == [("first", 1)]
+    session.append("user/message", "two")
+    assert heard == [("first", 1), ("first", 2), ("later", 2)]

@@ -411,7 +411,14 @@ def load_bridge():
             raise failure
         return 9000 if name == "pcc_gui_metal_window_create" else 0
 
+    def call_typed(pointer, restype, argtypes, values, result):
+        assert restype == "i64"
+        assert argtypes == ()
+        assert values == ()
+        abi.store(result, 0, call(pointer, *values))
+
     namespace = {
+        "call_c_abi": call_typed,
         "c_int64": object(),
         "extern": lambda name, *args: abi.function(name),
         "cstr": lambda value: value,
@@ -546,3 +553,21 @@ def test_interrupted_cleanup_still_releases_remaining_owners(monkeypatch):
     assert abi.log.count("close") == 1
     assert resources.dispose() is None
     abi.assert_no_allocations()
+
+
+def test_bridge_pump_uses_declared_no_argument_c_abi():
+    bridge, abi, calls = load_bridge()
+    declaration = (
+        PROJECT.parents[1] / "pcc_gui" / "native" / "pcc_gui_metal_render_bridge.m"
+    ).read_text()
+    assert "int64_t pcc_gui_metal_run_loop_pump(void)" in declaration
+    try:
+        assert bridge.init("Harness", 1280, 800, "fake-bridge") == 0
+        assert bridge.running() == 1
+        pump_calls = [call for call in calls if call[0] == "pcc_gui_metal_run_loop_pump"]
+        assert pump_calls == [
+            ("pcc_gui_metal_run_loop_pump",),
+            ("pcc_gui_metal_run_loop_pump",),
+        ]
+    finally:
+        bridge.close()

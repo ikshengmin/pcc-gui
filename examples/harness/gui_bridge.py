@@ -5,6 +5,7 @@ from pcc.extern import (
     extern,
 )
 from pcc.unsafe import (
+    call_c_abi,
     call_i64_ptr1,
     call_i64_ptr2,
     call_i64_ptr3,
@@ -119,7 +120,7 @@ def init(title, width: int, height: int, dylib_path) -> int:
     _setg(RENDER_ACK_SLOT, -1)
     _setg(TEXT_COUNT_SLOT, 0)
     call_i64_ptr1(show, window)
-    call_i64_ptr1(pump, null())
+    _pump()
     return 0
 
 
@@ -181,10 +182,16 @@ def poll_click(x_out, y_out) -> int:
     return call_i64_ptr3(_gp(CLICK_SLOT), _gp(WINDOW_SLOT), x_out, y_out)
 
 
+def _pump() -> None:
+    # The native bridge declares int64_t pump(void), with no dummy argument.
+    result = stack_alloc(8)
+    call_c_abi(_gp(PUMP_SLOT), "i64", (), (), result)
+
+
 def running() -> int:
     if _g(WINDOW_SLOT) == 0:
         return 0
-    call_i64_ptr1(_gp(PUMP_SLOT), null())
+    _pump()
     return 0 if call_i64_ptr1(_gp(CLOSED_SLOT), _gp(WINDOW_SLOT)) != 0 else 1
 
 

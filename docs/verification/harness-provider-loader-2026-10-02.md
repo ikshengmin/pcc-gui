@@ -1,12 +1,104 @@
-# Harness provider and Loader qualification
+# Harness provider, Loader, Session and GUI qualification
 
-## Recovery qualification status (2026-10-03)
+## Current qualification (2026-10-04)
 
-The keyed Loader and plugin-disposal implementations were reconstructed from
-retained source snippets after the cloud filesystem reset. The pinned reference
-remains `47f943859bef60e4160492346772ded9b24f765a`; its full reference checkout
-has not been restored or re-executed. References below describe the prior
-source audit, not a fresh differential qualification.
+The exact pinned DeepSeek Harness source at
+`47f943859bef60e4160492346772ded9b24f765a` is restored. The independent reference
+receipt verifies all 7,412 Git blobs and file modes; its archive SHA-256 is
+`534c9f1c9d30fea136026ecf7a23c2137e350f43558e2f1eff6218aef7b15b26`.
+This pass inspected actual restored source. The upstream TypeScript application
+was not executed. Source comparison, host regression, native execution and
+interaction/pixel equivalence remain separate evidence.
+
+The unchanged GUI baseline `45b84f1d1b112c4a88cc9d5a6772077a2f78bb7c`
+passed all **147 Harness host cases** freshly. The repaired candidate passed
+**204 host cases plus 14 subtests**, with nine integration cases explicitly
+deselected. This final selection contains all **156 Harness host cases**, the
+complete low-cost declarative contract, test-infrastructure, Harness shell and
+owned-text suites, plus all source-only framework declaration checks. Tests
+that emit, compile, link or execute native code were outside this selection;
+this is not the complete default pytest suite.
+
+The final gate used qualified CPython 3.15.0rc1 and pytest 9.0.3, an explicit
+import binding to the immutable 2026-10-04 05:27:21 core capture (source identity
+manifest SHA-256 `f7d16454da570550c0a9ac9ffd52ad8ca187bf32960adadf17ab13f2c236b236`),
+no automatic pytest plugin loading, and disabled native provisioning. It took
+1.20 seconds in pytest and 2.415 seconds under a 30-second/512-MiB process-tree
+watchdog, with 69,849,088 bytes sampled peak RSS. Candidate source hashes were
+unchanged during every run. The baseline run took 0.71 seconds in pytest;
+all earlier test counts below are retained only as historical evidence.
+
+### Source-grounded repairs
+
+1. Session event publication now preserves the append commit point when a
+   synchronous observer fails: diagnostics go to stderr and remaining observers
+   still receive the event. Reentrant append is rejected before a second event
+   can commit. Turn/step helpers check the same publication guard before changing
+   their lifecycle state. A `finally` releases the guard after validation or
+   publication failures. Eight added cases cover containment, later appends,
+   reentrancy, all four lifecycle helpers, failed validation and observer snapshots.
+   These contracts come from pinned `packages/core/session/src/index.ts`
+   (`invokeContainedSessionObservers`, `Session.append`) and its
+   `tests/session.spec.ts` containment and reentrant-observer cases.
+2. The Harness bridge invokes `pcc_gui_metal_run_loop_pump(void)` using the
+   existing typed `call_c_abi` contract with `i64` return and zero arguments.
+   Both initialization and ongoing pumping previously passed a dummy pointer
+   through the one-pointer intrinsic, contrary to the native C declaration.
+   The new host ABI regression inspects that declaration and asserts both real
+   bridge paths call it with no arguments. Native lowering and execution of
+   this candidate remain unqualified.
+
+Three controls using the old implementation failed for the intended reasons:
+escaped observer exception, extra reentrant event and the extra pump argument.
+The repairs and tests are isolated from the baseline until coordinator
+integration. No compiler/runtime build, local Mac action, network provider
+request, commit or push was performed in this pass.
+
+### Fresh pinned-source contract comparison and remaining gaps
+
+- **Loader:** `vendor/loader/src/config/entry.ts` and `group.ts` use stable ids,
+  per-entry update/rollback, asynchronous group settlement and nested owning
+  fibers. The PCC host tests exercise keyed retention, static dependency restart,
+  disposal and rollback for its synchronous subset. Upstream can update a
+  config on a live fiber; PCC currently replaces a changed record. Upstream
+  retains group fibers when disabled; PCC filters disabled group records and
+  their descendants. Plugin-owned nested entry trees and full asynchronous
+  transaction semantics remain open.
+- **HMR:** pinned `vendor/hmr/src/index.ts` watches module dependencies and exact
+  config paths, serializes dirty refreshes and awaits watcher/task teardown.
+  PCC catalog-generation replacement is explicit synchronous reconciliation;
+  it does not implement the upstream automatic watcher/module reload contract.
+- **Session:** the repaired synchronous publication subset now matches the
+  inspected containment/reentrancy contract. Upstream also snapshots/freezes
+  JSON events and headers, uses a different full event envelope, contains
+  rejected promises and supports scoped store publication/detachment and awaited
+  flush. PCC's scalar event codec, mutable event objects and synchronous
+  callbacks do not establish those capabilities or upstream wire compatibility.
+- **Native UI bridge:** host lifetime tests execute actual Python bridge logic
+  with explicitly fake pointers and native functions. The typed pump repair
+  corrects a source-visible signature mismatch. Actual C/Objective-C ABI calls,
+  callback ownership under GC0–4 and AppKit/Metal rendering remain unexecuted.
+- **UI behavior and pixels:** all five source anchors in
+  `examples/harness/gui/upstream-baseline.json` were inspected at the exact pin.
+  The reference has responsive columns, resizing/collapse, theme tokens and a
+  shared hero/active composer. PCC still uses a fixed 1280×800 first shell and
+  restricted controls. There are no matched viewport/input traces or image
+  comparisons from this pass. A declaration, fake-ABI interaction or source
+  color match cannot establish visual equivalence.
+
+The sealed off-tree evidence is identified by
+`pcc-gui-qualification-20261004T0532Z`: it contains the baseline/candidate
+file identities, test selection and exact launches, JUnit/log/resource receipts,
+old-source controls, inspected-reference hashes, and an integration delta.
+Only this maintained qualification document is updated; the upstream pin and
+existing migration ledger identities remain unchanged. A future migration
+commit must reconcile its ordered record with the existing pending slice.
+
+## Historical recovery qualification (2026-10-03)
+
+The following records describe recovery work before the fresh source comparison
+and repaired-candidate gate above. At that time the full pinned reference had
+not been restored or re-executed.
 
 Selective reconciliation preserves unchanged entry identities across edits,
 reordering, insertion and removal. Changed groups and static dependency chains

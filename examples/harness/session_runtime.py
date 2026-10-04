@@ -1,5 +1,6 @@
 """Versioned event-sourced sessions and replay projections."""
 
+import sys
 import time
 
 
@@ -223,6 +224,7 @@ class Session:
         self.header = header
         self.events = []
         self.listeners = []
+        self._publishing_event = False
         self.next_sequence = 1
         self.next_turn = 1
         self.active_turn = 0
@@ -266,33 +268,53 @@ class Session:
         input_tokens: int = -1,
         output_tokens: int = -1,
     ) -> SessionEvent:
-        if event_time < 0:
-            event_time = self._now_ms()
-        event = SessionEvent(
-            self.next_sequence,
-            event_type,
-            text,
-            turn,
-            step,
-            call_id,
-            name,
-            arguments,
-            reason,
-            source,
-            metadata,
-            ignorable,
-            event_time,
-            input_tokens,
-            output_tokens,
-        )
-        self.events.append(event)
-        self.next_sequence += 1
-        listeners = self.listeners.copy()
-        i = 0
-        while i < len(listeners):
-            listeners[i](self, event)
-            i += 1
-        return event
+        self._ensure_append_available()
+        self._publishing_event = True
+        try:
+            if event_time < 0:
+                event_time = self._now_ms()
+            event = SessionEvent(
+                self.next_sequence,
+                event_type,
+                text,
+                turn,
+                step,
+                call_id,
+                name,
+                arguments,
+                reason,
+                source,
+                metadata,
+                ignorable,
+                event_time,
+                input_tokens,
+                output_tokens,
+            )
+            listeners = self.listeners.copy()
+            self.events.append(event)
+            self.next_sequence += 1
+            i = 0
+            while i < len(listeners):
+                try:
+                    listeners[i](self, event)
+                except Exception as error:
+                    # Publication follows the commit point. A failed observer
+                    # cannot veto the event or suppress the remaining observers.
+                    print(
+                        'session "' + self.header.session_id
+                        + '": session/event listener threw: ' + str(error),
+                        file=sys.stderr,
+                    )
+                i += 1
+            return event
+        finally:
+            self._publishing_event = False
+
+    def _ensure_append_available(self) -> None:
+        if self._publishing_event:
+            raise RuntimeError(
+                "session append cannot reenter while another append is being published"
+            )
 
     def _now_ms(self) -> int:
         if self.clock is not None:
@@ -300,6 +322,7 @@ class Session:
         return int(time.time() * 1000.0)
 
     def start_turn(self) -> int:
+        self._ensure_append_available()
         if self.active_turn != 0:
             raise RuntimeError("a session turn is already active")
         turn = self.next_turn
@@ -310,6 +333,7 @@ class Session:
         return turn
 
     def start_step(self) -> int:
+        self._ensure_append_available()
         if self.active_turn == 0:
             raise RuntimeError("cannot start a step without an active turn")
         if self.active_step != 0:
@@ -329,6 +353,7 @@ class Session:
         return step
 
     def end_step(self) -> None:
+        self._ensure_append_available()
         if self.active_step == 0:
             raise RuntimeError("no session step is active")
         self.append(
@@ -337,6 +362,7 @@ class Session:
         self.active_step = 0
 
     def end_turn(self, reason: str) -> None:
+        self._ensure_append_available()
         if self.active_turn == 0:
             raise RuntimeError("no session turn is active")
         if self.active_step != 0:
