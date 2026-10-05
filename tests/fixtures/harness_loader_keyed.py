@@ -114,6 +114,52 @@ def provider_lifecycle() -> None:
     require(trace == ["on:old", "off:old", "on:new", "off:new"], "provider cleanup")
 
 
+def disabled_group_lifecycle() -> None:
+    kernel = PluginKernel()
+    catalog = PluginCatalog()
+    trace = []
+
+    def provider(scope, config):
+        scope.provide("model", "ready")
+
+    def consumer(scope):
+        trace.append("on:" + scope.require("model", "joined"))
+        scope.effect(lambda: lambda: trace.append("off"))
+
+    catalog.register("provider", provider)
+    loader = PluginLoader(kernel, catalog)
+    inner = LoaderEntry("inner", group=True, children=[
+        LoaderEntry("provider", "provider", provides=["model"]),
+    ])
+    group = LoaderEntry("group", group=True, children=[inner],
+                        isolate_names=["model"], isolate_realms=[""])
+    loader.reconcile([group])
+    owner = loader.records[0].context
+    nested_owner = loader.records[1].context
+    joined = kernel.context.isolate("model", owner.service_realm("model"))
+    kernel.install("joined", consumer, inject=["model"], parent=joined)
+    consumer_fiber = kernel.plugin_fibers[1]
+    group.disabled = True
+    loader.reconcile([group])
+    require(loader.mounted_entries() == ["group", "inner"], "disabled owners missing")
+    require(owner.active and nested_owner.active, "disabled owners retired")
+    require(kernel.plugin_state("joined") == "PENDING", "disabled provider visible")
+    group.disabled = False
+    loader.reconcile([group])
+    require(loader.records[0].context is owner, "group owner replaced")
+    require(loader.records[1].context is nested_owner, "nested owner replaced")
+    require(kernel.plugin_fibers[0] is consumer_fiber, "joined consumer replaced")
+    require(kernel.plugin_state("joined") == "ACTIVE", "private realm lost")
+    require(trace == ["on:ready", "off", "on:ready"], "disabled group trace")
+    loader.reconcile([])
+    require(not owner.active and not nested_owner.active, "removed owners retained")
+    require(kernel.context.children == [joined], "removed group remains reachable")
+    require(kernel.context.service_registrations == [], "removed service retained")
+    require(trace == ["on:ready", "off", "on:ready", "off"], "removed group trace")
+    loader.dispose()
+    kernel.dispose()
+
+
 def registry_release_lifecycle() -> None:
     kernel = PluginKernel()
     catalog = PluginCatalog()
@@ -165,6 +211,7 @@ def main() -> int:
     keyed_lifecycle()
     group_and_dependency_lifecycle()
     provider_lifecycle()
+    disabled_group_lifecycle()
     registry_release_lifecycle()
     print("HARNESS_KEYED_LOADER_OK")
     return 0

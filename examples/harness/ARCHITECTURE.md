@@ -75,7 +75,11 @@ Local secret files are owner-only and atomically replaced.
   facilities. Declarative Loader reconciliation preserves unchanged entry
   identities across reordering and selective replacement. Owned descendants
   and static dependents restart with a changed mount; service-dependent fiber
-  transitions remain kernel-owned. Disposal removes retired scopes and
+  transitions remain kernel-owned. Disabling a group withdraws its plugin
+  descendants while retaining nested group owners and their service realms;
+  re-enabling uses the same realms. Removing the group disposes those owners.
+  Retained entries publish updated declarations only after reconciliation
+  succeeds. Disposal removes retired scopes and
   registrations from live owners while committed service bindings survive
   consumer cleanup. Event dispatch retains its selected callbacks if a listener
   is unregistered during that dispatch. Explicit catalog hot replacement and

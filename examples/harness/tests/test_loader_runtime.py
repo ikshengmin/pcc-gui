@@ -207,8 +207,11 @@ def test_catalog_registration_and_disabled_group_are_owned():
             )
         ]
     )
-    assert loader.mounted_entries() == []
+    assert loader.mounted_entries() == ["disabled"]
     assert calls == []
+    assert loader.records[0].context.active
+    loader.dispose()
+    assert kernel.context.children == []
 
     registration.dispose()
     registration.dispose()
@@ -605,14 +608,21 @@ def test_disabling_group_preserves_unrelated_later_mount():
     group = LoaderEntry("group", group=True, children=[_tracked_entry("child")])
     stable = _tracked_entry("stable")
     loader.reconcile([group, stable])
+    group_record = loader.records[0]
+    group_scope = group_record.context
     stable_record = loader.records[2]
 
     group.disabled = True
     loader.reconcile([group, stable])
-    assert loader.records == [stable_record]
+    assert loader.records == [group_record, stable_record]
+    assert group_record.context is group_scope and group_scope.active
+    assert group_record.entry.disabled
     assert trace == ["on:child", "on:stable", "off:child"]
     group.disabled = False
     loader.reconcile([group, stable])
+    assert loader.records[0] is group_record
+    assert group_record.context is group_scope
+    assert not group_record.entry.disabled
     assert loader.records[2] is stable_record
     assert trace == ["on:child", "on:stable", "off:child", "on:child"]
     loader.dispose()

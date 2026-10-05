@@ -119,7 +119,7 @@ class LoaderEntry:
         )
 
     def signature(self) -> str:
-        """Return the complete replacement identity used by reconciliation."""
+        """Return mount identity; a group disable only changes its descendants."""
         payload = {
             "id": self.entry_id,
             "name": self.name,
@@ -128,7 +128,7 @@ class LoaderEntry:
             "inject": self.inject,
             "provides": self.provides,
             "group": self.group,
-            "disabled": self.disabled,
+            "disabled": self.disabled and not self.group,
             "isolateNames": self.isolate_names,
             "isolateRealms": self.isolate_realms,
         }
@@ -456,6 +456,15 @@ class PluginLoader:
                     + str(cleanup_failure)
                 )
             raise error
+        # Retained owners keep their identity, but their committed declaration
+        # must reflect new child trees and group activation choices. Publish
+        # this only after every candidate mount succeeds so rollback still
+        # sees the previous declarations.
+        i = 0
+        while i < len(committed):
+            committed[i].entry = desired[i].entry
+            committed[i].entry_signature = desired[i].entry_signature
+            i += 1
         self.records = committed
 
     def dispose(self) -> None:
@@ -487,12 +496,15 @@ class PluginLoader:
         while i < len(entries):
             entry = entries[i]
             disabled = parent_disabled or entry.disabled
-            if not disabled:
+            # Upstream groups remain mounted even beneath disabled ancestors.
+            # Their owned private realms must survive while plugin descendants
+            # are withdrawn, then be reused when those descendants return.
+            if entry.group or not disabled:
                 output.append(LoaderRecord(entry, parent_id))
                 next_parent = parent_id
                 if entry.group:
                     next_parent = entry.entry_id
-                self._flatten(entry.children, next_parent, False, output)
+                self._flatten(entry.children, next_parent, disabled, output)
             i += 1
 
     def _validate(self, records) -> None:
