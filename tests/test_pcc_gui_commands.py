@@ -187,7 +187,7 @@ def command_handle_release(value: int) -> int:
     return 0
 
 @c_abi_typed_export("command_sync", "i32", ("ptr", "i64"))
-def command_sync(invoke, resolver: int) -> int:
+def command_sync(invoke: c_ptr, resolver: int) -> int:
     if load_i64(invoke, 48) != resolver or load_i32(invoke, 8) != 1:
         return -1
     payload = load_ptr(invoke, 24)
@@ -198,11 +198,11 @@ def command_sync(invoke, resolver: int) -> int:
     return resolve_result(resolver, result, 8)
 
 @c_abi_typed_export("command_error", "i32", ("ptr", "i64"))
-def command_error(invoke, resolver: int) -> int:
+def command_error(invoke: c_ptr, resolver: int) -> int:
     return resolve_error(resolver, -116, load_i32(invoke, 8))
 
 @c_abi_typed_export("command_async", "i32", ("ptr", "i64"))
-def command_async(invoke, resolver: int) -> int:
+def command_async(invoke: c_ptr, resolver: int) -> int:
     copied = stack_alloc(16)
     if request_payload(resolver, copied) != 0:
         return -1
@@ -216,7 +216,7 @@ def command_async(invoke, resolver: int) -> int:
 def command_legacy(value: int) -> int:
     return value + 5
 
-def fill_invoke(packet, request: int, command: int, flags: int, target: int, payload, length: int, context: int, resolver: int, error) -> None:
+def fill_invoke(packet: int, request: int, command: int, flags: int, target: int, payload: int, length: int, context: int, resolver: int, error: int) -> None:
     store_i64(packet, 0, request)
     store_i32(packet, 8, command)
     store_i32(packet, 12, flags)
