@@ -58,6 +58,13 @@ int main(void) {
       if (pcc_gui_metal_window_close(second)) return 11;
       if (!activate(first) || pcc_gui_metal_window_close(first)) return 12;
     }
+    // Shown AppKit windows can remain retained by queued activation/close
+    // events until the native loop drains. The exported handle is retired;
+    // observe only weak references while waiting for framework cleanup.
+    for (int attempt = 0; attempt < 100; attempt++) {
+      if (first_observed == nil && second_observed == nil) break;
+      pcc_gui_metal_run_loop_pump();
+    }
     if (first_observed != nil || second_observed != nil) return 13;
   }
   puts("PCC_NATIVE_WINDOW_FOCUS_OK cycles=3 windows=6 rejected_worker=1 outputs_preserved=1");
