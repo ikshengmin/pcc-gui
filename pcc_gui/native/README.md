@@ -28,3 +28,9 @@ and a translated document's focusability remain separate owner responsibilities.
 windows, activation transfer, hiding, repeated close/reopen and wrong-thread
 rejection. `tests/test_pcc_gui_window_focus_darwin.py` builds it with clang as an
 AppKit ABI oracle. Passing it does not qualify native PCC1 or translated Harness.
+
+The 2026-11-01 native run passed three cycles with six real windows, focus
+transfer and hide behavior, worker-thread rejection, preserved error outputs and
+weak release checks after bounded native close processing. Each observer must
+have its own Objective-C `__weak` declaration. The test supplies no PCC runtime
+archive and does not build or replace the shared compiler.
