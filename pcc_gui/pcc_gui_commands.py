@@ -207,7 +207,7 @@ def _message(code: int) -> c_ptr:
     return cstr("invalid gui command request")
 
 
-def _write_error(error_out, code: int, phase: int, subject: int) -> int:
+def _write_error(error_out: c_ptr, code: int, phase: int, subject: int) -> int:
     if not ptr_is_null(error_out):
         store_i32(error_out, 0, code)
         store_i32(error_out, 4, phase)
@@ -216,7 +216,7 @@ def _write_error(error_out, code: int, phase: int, subject: int) -> int:
     return code
 
 
-def _clear_error(error_out) -> None:
+def _clear_error(error_out: c_ptr) -> None:
     if not ptr_is_null(error_out):
         store_i32(error_out, 0, 0)
         store_i32(error_out, 4, 0)
@@ -249,7 +249,7 @@ def _free_state_index() -> int:
     return -1
 
 
-def _release_state_value(record) -> None:
+def _release_state_value(record: c_ptr) -> None:
     if load_i32(record, 0) == STATE_OPAQUE_HANDLE:
         value = load_i64(record, 24)
         callback = _base("pcc_gui_command_handle_release")
@@ -507,7 +507,7 @@ def pcc_gui_commands_ensure_legacy() -> int:
 @c_abi_typed_export(
     "pcc_gui_managed_state_set_handle_ownership", "i32", ("ptr", "ptr")
 )
-def pcc_gui_managed_state_set_handle_ownership(retain, release) -> int:
+def pcc_gui_managed_state_set_handle_ownership(retain: c_ptr, release: c_ptr) -> int:
     if ptr_is_null(retain) or ptr_is_null(release):
         return ERR_OWNERSHIP
     if (
@@ -611,7 +611,7 @@ def pcc_gui_managed_state_set(
 @c_abi_typed_export(
     "pcc_gui_managed_state_get", "i32", ("i64", "i64", "ptr")
 )
-def pcc_gui_managed_state_get(target_id: int, key: int, state_out) -> int:
+def pcc_gui_managed_state_get(target_id: int, key: int, state_out: c_ptr) -> int:
     if ptr_is_null(state_out):
         return ERR_OWNERSHIP
     index = _state_index(target_id, key)
@@ -710,7 +710,7 @@ def pcc_gui_managed_binding_update(source_target: int, source_key: int) -> int:
 
 def _register_command(
     command_id: int,
-    callback,
+    callback: c_ptr,
     payload_kind: int,
     policy_kind: int,
     policy_target: int,
@@ -751,7 +751,7 @@ def _register_command(
 )
 def pcc_gui_commands_register(
     command_id: int,
-    callback,
+    callback: c_ptr,
     payload_kind: int,
     policy_kind: int,
     policy_target: int,
@@ -807,7 +807,7 @@ def _command_exists(command_id: int) -> int:
     return 0
 
 
-def _payload_valid(kind: int, payload, length: int) -> int:
+def _payload_valid(kind: int, payload: c_ptr, length: int) -> int:
     if kind == PAYLOAD_NONE:
         return 1 if length == 0 and ptr_is_null(payload) else 0
     if kind == PAYLOAD_BYTES:
@@ -832,7 +832,7 @@ def _terminal_error_for_resolver(index: int) -> int:
     "pcc_gui_commands_resolve_result", "i32", ("i64", "ptr", "i64")
 )
 def pcc_gui_commands_resolve_result(
-    resolver_id: int, payload, payload_length: int
+    resolver_id: int, payload: c_ptr, payload_length: int
 ) -> int:
     index = _resolver_index(resolver_id)
     if index < 0:
@@ -894,7 +894,7 @@ def _cancel_resolver(index: int) -> int:
 
 
 @c_abi_typed_export("pcc_gui_commands_invoke", "i32", ("ptr",))
-def pcc_gui_commands_invoke(invoke) -> int:
+def pcc_gui_commands_invoke(invoke: c_ptr) -> int:
     if ptr_is_null(invoke):
         return ERR_OWNERSHIP
     request_id = load_i64(invoke, 0)
@@ -1027,7 +1027,7 @@ def pcc_gui_commands_invoke(invoke) -> int:
 @c_abi_typed_export(
     "pcc_gui_commands_request_payload", "i32", ("i64", "ptr")
 )
-def pcc_gui_commands_request_payload(resolver_id: int, payload_out) -> int:
+def pcc_gui_commands_request_payload(resolver_id: int, payload_out: c_ptr) -> int:
     if ptr_is_null(payload_out):
         return ERR_OWNERSHIP
     index = _resolver_index(resolver_id)
@@ -1042,7 +1042,7 @@ def pcc_gui_commands_request_payload(resolver_id: int, payload_out) -> int:
 @c_abi_typed_export(
     "pcc_gui_commands_completion", "i32", ("i64", "ptr")
 )
-def pcc_gui_commands_completion(resolver_id: int, completion_out) -> int:
+def pcc_gui_commands_completion(resolver_id: int, completion_out: c_ptr) -> int:
     if ptr_is_null(completion_out):
         return ERR_OWNERSHIP
     index = _resolver_index(resolver_id)
@@ -1196,7 +1196,7 @@ def pcc_gui_commands_shutdown() -> int:
     "pcc_gui_commands_register_legacy", "i32", ("i64", "i32", "ptr")
 )
 def pcc_gui_commands_register_legacy(
-    target_id: int, command_id: int, callback
+    target_id: int, command_id: int, callback: c_ptr
 ) -> int:
     return _register_command(
         command_id,
