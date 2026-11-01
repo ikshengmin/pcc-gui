@@ -59,6 +59,12 @@ int main(void) {
       if (pcc_gui_metal_window_close(second)) return 11;
       if (!activate(first) || pcc_gui_metal_window_close(first)) return 12;
     }
+    // AppKit can retain shown windows until native close events are serviced.
+    // Keep both observations weak and bound the drain without reusing handles.
+    for (int attempt = 0; attempt < 100; attempt++) {
+      @autoreleasepool { pcc_gui_metal_run_loop_pump(); }
+      if (first_observed == nil && second_observed == nil) break;
+    }
     if (first_observed != nil || second_observed != nil) return 13;
   }
   puts("PCC_NATIVE_WINDOW_FOCUS_OK cycles=3 windows=6 rejected_worker=1 outputs_preserved=1");
