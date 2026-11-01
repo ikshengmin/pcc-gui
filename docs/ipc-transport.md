@@ -37,3 +37,11 @@ IPC fixture (copied request, pending read, capacity retry, consumed reply,
 cancellation, structured error and empty payload). The installed PCC1 lane remains
 unqualified when it lacks the framework's existing `c_abi_alignof` intrinsic; this
 is a compiler/toolchain prerequisite, not an IPC success.
+
+The affected canonical state/binding/command lifecycle also passes through the
+current-source host compiler, including handle retention/release and teardown.
+Its raw C callbacks use `c_ptr` annotations; its ordinary Python packet builder
+uses integer-address annotations. The PNG pointer-boundary test decodes a valid,
+checksummed RGBA PNG and checks buffer sizing and actual output pixels. These
+native executable checks, ABI layout checks and literal-intrinsic checks are
+independent of physical window rendering and full application IPC integration.
