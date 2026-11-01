@@ -1,13 +1,13 @@
 import pcc_gui
-from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, extern
+from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, c_rawptr, extern
 from pcc.unsafe import function_addr, load_i32, load_i64, load_i8, load_ptr, null, stack_alloc, store_i8, store_i64
 
 init = extern("pcc_gui_commands_init", (c_int64,c_int64,c_int64,c_int64), c_int32)
-register = extern("pcc_gui_commands_register", (c_int32,c_ptr,c_int32,c_int32,c_int64,c_int64), c_int32)
-submit = extern("pcc_gui_ipc_submit", (c_int64,c_int32,c_int64,c_int64,c_int64,c_ptr,c_int64,c_ptr), c_int32)
-take = extern("pcc_gui_ipc_take", (c_int64,c_ptr,c_int64,c_ptr), c_int32)
-request = extern("pcc_gui_commands_request_payload", (c_int64,c_ptr), c_int32)
-resolve = extern("pcc_gui_commands_resolve_result", (c_int64,c_ptr,c_int64), c_int32)
+register = extern("pcc_gui_commands_register", (c_int32,c_rawptr,c_int32,c_int32,c_int64,c_int64), c_int32)
+submit = extern("pcc_gui_ipc_submit", (c_int64,c_int32,c_int64,c_int64,c_int64,c_rawptr,c_int64,c_rawptr), c_int32)
+take = extern("pcc_gui_ipc_take", (c_int64,c_rawptr,c_int64,c_rawptr), c_int32)
+request = extern("pcc_gui_commands_request_payload", (c_int64,c_rawptr), c_int32)
+resolve = extern("pcc_gui_commands_resolve_result", (c_int64,c_rawptr,c_int64), c_int32)
 teardown = extern("pcc_gui_commands_target_teardown", (c_int64,), c_int32)
 shutdown = extern("pcc_gui_commands_shutdown", (), c_int64)
 
