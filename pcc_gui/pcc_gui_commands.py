@@ -145,41 +145,41 @@ def _base(name: str) -> int:
     return 0
 
 
-def _state_at(index: int):
+def _state_at(index: int) -> c_ptr:
     return int_to_ptr(
         _base("pcc_gui_managed_state_records") + index * STATE_SIZE
     )
 
 
-def _binding_at(index: int):
+def _binding_at(index: int) -> c_ptr:
     return int_to_ptr(
         _base("pcc_gui_managed_binding_records") + index * BINDING_SIZE
     )
 
 
-def _command_at(index: int):
+def _command_at(index: int) -> c_ptr:
     return int_to_ptr(_base("pcc_gui_command_records") + index * COMMAND_SIZE)
 
 
-def _resolver_at(index: int):
+def _resolver_at(index: int) -> c_ptr:
     return int_to_ptr(
         _base("pcc_gui_command_resolvers") + index * RESOLVER_SIZE
     )
 
 
-def _request_payload_at(index: int):
+def _request_payload_at(index: int) -> c_ptr:
     return int_to_ptr(
         _base("pcc_gui_command_request_payloads") + index * MAX_PAYLOAD
     )
 
 
-def _completion_payload_at(index: int):
+def _completion_payload_at(index: int) -> c_ptr:
     return int_to_ptr(
         _base("pcc_gui_command_completion_payloads") + index * MAX_PAYLOAD
     )
 
 
-def _message(code: int):
+def _message(code: int) -> c_ptr:
     if code == ERR_CAPACITY:
         return cstr("gui command capacity exceeded")
     if code == ERR_DUPLICATE_KEY:
