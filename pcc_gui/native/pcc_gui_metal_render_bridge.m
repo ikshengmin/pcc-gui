@@ -1027,6 +1027,23 @@ int64_t pcc_gui_metal_window_is_closed(void *handle) {
   }
 }
 
+/* Main-thread snapshot; the caller owns the live window handle. These native
+   facts are separate from a control tree's logical focus or browser document
+   focus. A failed query leaves both output words untouched. */
+int64_t pcc_gui_metal_window_focus_state(void *handle, int32_t *key_out,
+                                        int32_t *application_active_out) {
+  if (handle == NULL || key_out == NULL || application_active_out == NULL ||
+      ![NSThread isMainThread]) return 2;
+  @autoreleasepool {
+    NSWindow *window = (__bridge NSWindow *)handle;
+    int32_t key = [window isKeyWindow] ? 1 : 0;
+    int32_t active = [NSApp isActive] ? 1 : 0;
+    *key_out = key;
+    *application_active_out = active;
+    return 0;
+  }
+}
+
 int64_t pcc_gui_metal_window_close(void *handle) {
   @autoreleasepool {
     if (handle == NULL) return -1;
