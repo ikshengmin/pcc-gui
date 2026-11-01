@@ -20,3 +20,8 @@ Electron IPC are separate work. No application channel or response is built in.
 Run `tests/test_pcc_gui_ipc.py` with the installed matching PCC1 and an explicitly
 staged runtime archive; the fixture checks native copies, sender policy, pending
 reads, capacity retry, one-time retirement and target cancellation.
+
+The source-oriented host-PCC test is an explicit separate lane using the same
+owned runtime and native executable. It validates current compiler source and
+does not substitute for the installed PCC1 test. Native compiler capability
+failures and stale runtime provenance must remain visible independently.

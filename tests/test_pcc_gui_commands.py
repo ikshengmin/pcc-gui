@@ -51,7 +51,8 @@ def test_gui_runtime_unsafe_static_intrinsics_use_literal_operands() -> None:
 
 
 def _compile_run(
-    tmp_path: Path, pcc_py_runtime_archive: Path, name: str, source: str
+    tmp_path: Path, pcc_py_runtime_archive: Path, name: str, source: str,
+    *, compiler: list[str] | None = None,
 ) -> str:
     src = tmp_path / f"{name}.py"
     exe = tmp_path / name
@@ -60,8 +61,7 @@ def _compile_run(
     env.pop("LC_ALL", None)
     env["PCC_RUNTIME_ARCHIVE"] = str(pcc_py_runtime_archive)
     built = subprocess.run(
-        [
-            str(compiler_path()),
+        (compiler if compiler is not None else [str(compiler_path())]) + [
             "--backend",
             "self",
             "--python-libpython=off",

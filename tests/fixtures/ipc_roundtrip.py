@@ -18,7 +18,7 @@ def deferred(packet, resolver: int) -> int:
 def main() -> int:
     if init(2,2,2,4) != 0:
         return 1
-    if register(7,function_addr(deferred),1,1,11,29) != 0:
+    if register(7,function_addr("ipc_deferred"),1,1,11,29) != 0:
         return 2
     value=stack_alloc(8)
     store_i8(value,0,65)
