@@ -6,6 +6,7 @@ import ast
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from gui_compiler import CORE_ROOT, compiler_path
@@ -147,30 +148,30 @@ def test_frozen_contract_matches_command_record_layouts() -> None:
 
 
 _COMMAND_PROGRAM = r'''
-from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, extern
+from pcc.extern import c_abi_typed_export, c_int32, c_int64, c_ptr, c_rawptr, extern
 from pcc.unsafe import define_global_i64, function_addr, global_addr, int_to_ptr, load_i32, load_i64, load_ptr, null, ptr_is_null, stack_alloc, store_i32, store_i64, store_ptr
 
 commands_init = extern("pcc_gui_commands_init", (c_int64,c_int64,c_int64,c_int64), c_int32)
-set_handle_ownership = extern("pcc_gui_managed_state_set_handle_ownership", (c_ptr,c_ptr), c_int32)
+set_handle_ownership = extern("pcc_gui_managed_state_set_handle_ownership", (c_rawptr,c_rawptr), c_int32)
 state_set = extern("pcc_gui_managed_state_set", (c_int64,c_int64,c_int32,c_int64,c_int64), c_int32)
-state_get = extern("pcc_gui_managed_state_get", (c_int64,c_int64,c_ptr), c_int32)
+state_get = extern("pcc_gui_managed_state_get", (c_int64,c_int64,c_rawptr), c_int32)
 binding_add = extern("pcc_gui_managed_binding_add", (c_int64,c_int64,c_int64,c_int64), c_int32)
-command_register = extern("pcc_gui_commands_register", (c_int32,c_ptr,c_int32,c_int32,c_int64,c_int64), c_int32)
-command_invoke = extern("pcc_gui_commands_invoke", (c_ptr,), c_int32)
-resolve_result = extern("pcc_gui_commands_resolve_result", (c_int64,c_ptr,c_int64), c_int32)
+command_register = extern("pcc_gui_commands_register", (c_int32,c_rawptr,c_int32,c_int32,c_int64,c_int64), c_int32)
+command_invoke = extern("pcc_gui_commands_invoke", (c_rawptr,), c_int32)
+resolve_result = extern("pcc_gui_commands_resolve_result", (c_int64,c_rawptr,c_int64), c_int32)
 resolve_error = extern("pcc_gui_commands_resolve_error", (c_int64,c_int32,c_int64), c_int32)
-request_payload = extern("pcc_gui_commands_request_payload", (c_int64,c_ptr), c_int32)
-completion = extern("pcc_gui_commands_completion", (c_int64,c_ptr), c_int32)
+request_payload = extern("pcc_gui_commands_request_payload", (c_int64,c_rawptr), c_int32)
+completion = extern("pcc_gui_commands_completion", (c_int64,c_rawptr), c_int32)
 release_completion = extern("pcc_gui_commands_release_completion", (c_int64,), c_int32)
 pending_count = extern("pcc_gui_commands_pending_count", (c_int64,), c_int64)
 target_teardown = extern("pcc_gui_commands_target_teardown", (c_int64,), c_int32)
 cancel_all = extern("pcc_gui_commands_cancel_all", (), c_int64)
 
-legacy_set_property = extern("pcc_gui_binding_set_property", (c_ptr,c_int32,c_int64), c_int32)
-legacy_get_property = extern("pcc_gui_binding_get_property", (c_ptr,c_int32), c_int64)
-legacy_set_command = extern("pcc_gui_binding_set_command", (c_ptr,c_int32,c_ptr), c_int32)
-legacy_has_command = extern("pcc_gui_binding_has_command", (c_ptr,c_int32), c_int32)
-legacy_invoke_command = extern("pcc_gui_binding_invoke_command", (c_ptr,c_int32,c_int64), c_int32)
+legacy_set_property = extern("pcc_gui_binding_set_property", (c_rawptr,c_int32,c_int64), c_int32)
+legacy_get_property = extern("pcc_gui_binding_get_property", (c_rawptr,c_int32), c_int64)
+legacy_set_command = extern("pcc_gui_binding_set_command", (c_rawptr,c_int32,c_rawptr), c_int32)
+legacy_has_command = extern("pcc_gui_binding_has_command", (c_rawptr,c_int32), c_int32)
+legacy_invoke_command = extern("pcc_gui_binding_invoke_command", (c_rawptr,c_int32,c_int64), c_int32)
 
 define_global_i64("command_retain_count", 0)
 define_global_i64("command_release_count", 0)
@@ -368,4 +369,12 @@ def test_typed_state_sync_async_error_capacity_and_teardown(
 ) -> None:
     assert "gui-command-state-ok" in _compile_run(
         tmp_path, pcc_py_runtime_archive, "gui_command_state", _COMMAND_PROGRAM
+    )
+
+
+def test_current_source_native_command_state_and_teardown(tmp_path, pcc_py_runtime_archive):
+    """Current-source compiler lane; installed PCC1 remains independent."""
+    assert "gui-command-state-ok" in _compile_run(
+        tmp_path,pcc_py_runtime_archive,"gui_command_state_host",_COMMAND_PROGRAM,
+        compiler=[sys.executable,"-m","pcc"],
     )
