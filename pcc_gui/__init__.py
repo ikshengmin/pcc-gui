@@ -15,6 +15,7 @@ from . import pcc_gui_controls  # noqa: F401
 from . import pcc_gui_elements  # noqa: F401
 from . import pcc_gui_events  # noqa: F401
 from . import pcc_gui_image  # noqa: F401
+from . import pcc_gui_ipc  # noqa: F401
 from . import pcc_gui_kit  # noqa: F401
 from . import pcc_gui_layout  # noqa: F401
 from . import pcc_gui_scheduler  # noqa: F401
