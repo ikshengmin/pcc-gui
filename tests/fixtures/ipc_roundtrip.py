@@ -8,6 +8,7 @@ submit = extern("pcc_gui_ipc_submit", (c_int64,c_int32,c_int64,c_int64,c_int64,c
 take = extern("pcc_gui_ipc_take", (c_int64,c_rawptr,c_int64,c_rawptr), c_int32)
 request = extern("pcc_gui_commands_request_payload", (c_int64,c_rawptr), c_int32)
 resolve = extern("pcc_gui_commands_resolve_result", (c_int64,c_rawptr,c_int64), c_int32)
+reject = extern("pcc_gui_commands_resolve_error", (c_int64,c_int32,c_int64), c_int32)
 teardown = extern("pcc_gui_commands_target_teardown", (c_int64,), c_int32)
 shutdown = extern("pcc_gui_commands_shutdown", (), c_int64)
 
@@ -43,10 +44,20 @@ def main() -> int:
         return 9
     if take(1,out,8,reply) != -108:
         return 10
-    if submit(2,7,11,29,2,value,1,null()) != 1 or teardown(11) != 0:
+    if submit(2,7,11,29,2,value,1,null()) != 1 or teardown(11) != 1:
         return 11
     if take(2,out,8,reply) != 0 or load_i32(reply,8) != 3:
         return 12
+    if register(7,function_addr("ipc_deferred"),1,1,11,29) != 0:
+        return 13
+    if submit(3,7,11,29,3,value,1,null()) != 1 or reject(3,-112,3) != 0:
+        return 14
+    if take(3,out,8,reply) != 0 or load_i32(reply,8) != 2 or load_i32(reply,12) != -112:
+        return 15
+    if submit(4,7,11,29,4,null(),0,null()) != 1 or resolve(4,null(),0) != 0:
+        return 16
+    if take(4,null(),0,reply) != 0 or load_i64(reply,24) != 0:
+        return 17
     shutdown()
     print("PCC_GUI_NATIVE_IPC_OK")
     return 0
