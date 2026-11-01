@@ -1,7 +1,8 @@
 """Native byte-message replies reuse the canonical command lifecycle."""
 from pathlib import Path
 import sys
-import base64
+import struct
+import zlib
 from test_pcc_gui_commands import _compile_run
 
 def test_native_ipc_copies_retries_and_consumes_once(tmp_path, pcc_py_runtime_archive):
@@ -11,7 +12,10 @@ def test_native_ipc_copies_retries_and_consumes_once(tmp_path, pcc_py_runtime_ar
 
 def test_host_pcc_native_image_pointer_boundary(tmp_path, pcc_py_runtime_archive):
     """Exercise the image decoder pointer annotations through a native binary."""
-    png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==')
+    def chunk(kind,data):
+        return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
+    png=(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',1,1,8,6,0,0,0))
+         +chunk(b'IDAT',zlib.compress(b'\x00\xff\x00\x00\xff'))+chunk(b'IEND',b''))
     stores='\n'.join(f'    store_i8(data,{i},{v})' for i,v in enumerate(png))
     source=f'''from pcc.extern import c_int32,c_int64,c_rawptr,extern
 from pcc.unsafe import stack_alloc,store_i8,load_i8,load_i64,null

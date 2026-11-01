@@ -25,3 +25,15 @@ The source-oriented host-PCC test is an explicit separate lane using the same
 owned runtime and native executable. It validates current compiler source and
 does not substitute for the installed PCC1 test. Native compiler capability
 failures and stale runtime provenance must remain visible independently.
+
+Ordinary Python callers pass unsafe address values through `c_rawptr` extern
+parameters. The `c_ptr` extern marker retains its legacy object projection and
+can preserve a tagged Python integer rather than its address. Native runtime
+modules use explicit `c_ptr` annotations on helper arguments/results to keep
+table pointers out of Python value storage. Packet layouts are unchanged.
+
+The current-source host compiler plus an owned arm64 runtime passes the native
+IPC fixture (copied request, pending read, capacity retry, consumed reply,
+cancellation, structured error and empty payload). The installed PCC1 lane remains
+unqualified when it lacks the framework's existing `c_abi_alignof` intrinsic; this
+is a compiler/toolchain prerequisite, not an IPC success.
