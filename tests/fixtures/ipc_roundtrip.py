@@ -12,7 +12,7 @@ teardown = extern("pcc_gui_commands_target_teardown", (c_int64,), c_int32)
 shutdown = extern("pcc_gui_commands_shutdown", (), c_int64)
 
 @c_abi_typed_export("ipc_deferred", "i32", ("ptr","i64"))
-def deferred(packet, resolver: int) -> int:
+def ipc_deferred(packet: c_ptr, resolver: int) -> int:
     return 1
 
 def main() -> int:

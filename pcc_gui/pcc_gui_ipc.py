@@ -27,7 +27,7 @@ _release = extern("pcc_gui_commands_release_completion", (c_int64,), c_int32)
 )
 def pcc_gui_ipc_submit(
     request_id: int, route: int, target_id: int, context_id: int,
-    resolver_id: int, payload, payload_length: int, error_out,
+    resolver_id: int, payload: c_ptr, payload_length: int, error_out: c_ptr,
 ) -> int:
     """Submit on the UI owner thread; the canonical owner copies the payload."""
     packet = stack_alloc(64)
@@ -46,7 +46,7 @@ def pcc_gui_ipc_submit(
 @c_abi_typed_export(
     "pcc_gui_ipc_take", "i32", ("i64", "ptr", "i64", "ptr"),
 )
-def pcc_gui_ipc_take(resolver_id: int, payload_out, capacity: int, completion_out) -> int:
+def pcc_gui_ipc_take(resolver_id: int, payload_out: c_ptr, capacity: int, completion_out: c_ptr) -> int:
     """Return 1 pending, 0 copied/consumed, or a canonical negative error.
 
     Failed/pending reads preserve caller output and keep a terminal reply for

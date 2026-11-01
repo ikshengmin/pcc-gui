@@ -80,7 +80,7 @@ def _u32(data: c_ptr, offset: int) -> int:
 
 @c_abi_typed_export("pcc_gui_png_decode", "i32", ("ptr", "i64", "ptr", "ptr", "i64"))
 def pcc_gui_png_decode(
-    data, data_len: int, out_header, out_pixels, out_cap: int
+    data: c_ptr, data_len: int, out_header: c_ptr, out_pixels: c_ptr, out_cap: int
 ) -> int:
     if ptr_is_null(data) or data_len < 8:
         return -1
