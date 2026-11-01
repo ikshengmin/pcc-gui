@@ -37,7 +37,8 @@ int main(void) {
   int32_t key = -7, active = -9;
   if (pcc_gui_metal_window_focus_state(NULL, &key, &active) != 2 || key != -7 || active != -9) return 1;
   for (int cycle = 0; cycle < 3; cycle++) {
-    __weak NSWindow *first_observed, *second_observed;
+    __weak NSWindow *first_observed;
+    __weak NSWindow *second_observed;
     @autoreleasepool {
       void *first = pcc_gui_metal_window_create("PCC focus A", 240, 120);
       void *second = pcc_gui_metal_window_create("PCC focus B", 240, 120);
@@ -57,13 +58,6 @@ int main(void) {
       if (!snapshot(second, 0, 0)) return 10;
       if (pcc_gui_metal_window_close(second)) return 11;
       if (!activate(first) || pcc_gui_metal_window_close(first)) return 12;
-    }
-    // Shown AppKit windows can remain retained by queued activation/close
-    // events until the native loop drains. The exported handle is retired;
-    // observe only weak references while waiting for framework cleanup.
-    for (int attempt = 0; attempt < 100; attempt++) {
-      if (first_observed == nil && second_observed == nil) break;
-      pcc_gui_metal_run_loop_pump();
     }
     if (first_observed != nil || second_observed != nil) return 13;
   }
