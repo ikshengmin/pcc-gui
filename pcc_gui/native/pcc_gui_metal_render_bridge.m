@@ -6,6 +6,7 @@
 #import <AppKit/AppKit.h>
 #include <stdint.h>
 #include <string.h>
+#include "pcc_gui_clipboard.inc"
 
 static char pcc_render_last_error[512];
 static uint64_t pcc_last_click = 0;  /* 0 = none, else packed (y<<32)|x */

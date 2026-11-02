@@ -34,3 +34,29 @@ transfer and hide behavior, worker-thread rejection, preserved error outputs and
 weak release checks after bounded native close processing. Each observer must
 have its own Objective-C `__weak` declaration. The test supplies no PCC runtime
 archive and does not build or replace the shared compiler.
+
+## Clipboard text leases
+
+The canonical bridge includes `pcc_gui_clipboard.inc`; consumers use
+`pcc_gui_clipboard.h` or the typed declarations in `pcc_gui_clipboard.py`.
+All operations require the UI thread. Positive opaque keys identify board leases
+and immutable UTF-8 snapshots. Snapshot copy/release is independent of subsequent
+clipboard mutations or board close; stale and duplicate releases are rejected.
+Text uses explicit lengths, preserving embedded NUL. Invalid UTF-8 is rejected
+before modifying the board. Named boards reject the system-reserved board names;
+the general board has its own explicit open operation. Closing a board lease does
+not erase its OS contents. Named-board disposal remains its creator's decision.
+
+Status 0 is success; 2 rejects arguments, stale keys or a wrong-thread call;
+3 rejects UTF-8 conversion; 4 reports native failure; 5 means insufficient copy
+space; 6 reports the size/identity bound. Text is bounded to 64 MiB and names to
+4096 bytes. Output arguments are unchanged on error, and snapshot output slots
+must be distinct. Native write failure after clearing the board is not rolled
+back. Snapshots/leases never contain Python/T2 objects or callbacks.
+
+`tests/fixtures/native_clipboard.m` is the minimal native consumer. Its integration
+test uses only unique private named pasteboards, checks native data independently,
+and exercises NUL/Unicode/empty text, immutable snapshots, stale keys, short
+buffers, worker-thread rejection and repeated release. The implementation is
+published before qualification; a clang/AppKit pass does not qualify installed
+PCC1, translated Electron services or a complete Harness GUI.

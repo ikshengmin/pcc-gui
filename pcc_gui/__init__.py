@@ -9,6 +9,7 @@ from . import pcc_gui_app  # noqa: F401
 from . import pcc_gui_app_lifecycle  # noqa: F401
 from . import pcc_gui_binding  # noqa: F401
 from . import pcc_gui_cg  # noqa: F401
+from . import pcc_gui_clipboard  # noqa: F401
 from . import pcc_gui_commands  # noqa: F401
 from . import pcc_gui_components  # noqa: F401
 from . import pcc_gui_controls  # noqa: F401
