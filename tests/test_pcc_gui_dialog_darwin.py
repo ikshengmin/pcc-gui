@@ -10,7 +10,7 @@ pytestmark=pytest.mark.integration
 def test_native_message_box_ownership(tmp_path:Path)->None:
     env=dict(os.environ);env.pop('LC_ALL',None)
     executable=tmp_path/'dialog'
-    build=subprocess.run(['xcrun','--sdk','macosx','clang','-fobjc-arc','-pthread','-framework','Foundation','-framework','AppKit','-framework','Metal','-framework','QuartzCore',str(REPO/'tests/fixtures/native_dialog.m'),'-o',str(executable)],env=env,capture_output=True,text=True,timeout=120)
+    build=subprocess.run(['xcrun','--sdk','macosx','clang','-fobjc-arc','-pthread','-framework','Foundation','-framework','AppKit','-framework','Metal','-framework','QuartzCore','-framework','CoreGraphics',str(REPO/'tests/fixtures/native_dialog.m'),'-o',str(executable)],env=env,capture_output=True,text=True,timeout=120)
     assert build.returncode==0,build.stdout+build.stderr
     run=subprocess.run([str(executable),str(tmp_path/'dialog.png')],env=env,capture_output=True,text=True,timeout=40)
     assert run.returncode==0,run.stdout+run.stderr

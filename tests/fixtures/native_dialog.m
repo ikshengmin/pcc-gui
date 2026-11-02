@@ -2,6 +2,7 @@
 #import <AppKit/AppKit.h>
 #include <assert.h>
 #include <pthread.h>
+#include <dlfcn.h>
 #include "../../pcc_gui/native/pcc_gui_metal_render_bridge.m"
 static int64_t key_new(void){int64_t key=-9;assert(pcc_gui_message_box_create(1,0,1,0,&key)==0);assert(key>0);assert(pcc_gui_message_box_text(key,0,"PCC dialog ABI probe",20)==0);assert(pcc_gui_message_box_text(key,1,"Owned native message",20)==0);assert(pcc_gui_message_box_text(key,2,"Automatic test; no application action",37)==0);assert(pcc_gui_message_box_text(key,3,"Remember this choice",20)==0);assert(pcc_gui_message_box_button(key,"Continue",8)==0);assert(pcc_gui_message_box_button(key,"Cancel",6)==0);return key;}
 static void spin(void){[[NSRunLoop currentRunLoop]runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];NSEvent *e;while((e=[NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate distantPast] inMode:NSDefaultRunLoopMode dequeue:YES]))[NSApp sendEvent:e];}
@@ -17,7 +18,13 @@ int main(int argc,const char **argv){@autoreleasepool{
  assert(pcc_gui_message_box_poll(key,&ready,&ready,&checked)==2);
  PccGuiMessageBox *box=pcc_dialog_get(key);box.alert.suppressionButton.state=NSControlStateValueOn;
  for(int i=0;i<5;i++)spin();
- if(argc>1){NSView *view=box.alert.window.contentView;[view display];NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];[view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];assert([[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}]writeToFile:[NSString stringWithUTF8String:argv[1]] atomically:YES]);}
+ if(argc>1){
+  typedef CGImageRef (*OwnedWindowCapture)(CGRect,CGWindowListOption,CGWindowID,CGWindowImageOption);
+  OwnedWindowCapture capture=(OwnedWindowCapture)dlsym(RTLD_DEFAULT,"CGWindowListCreateImage");assert(capture!=NULL);
+  CGImageRef image=capture(CGRectNull,kCGWindowListOptionIncludingWindow,(CGWindowID)box.alert.window.windowNumber,kCGWindowImageBoundsIgnoreFraming);
+  assert(image!=NULL);NSBitmapImageRep *rep=[[NSBitmapImageRep alloc]initWithCGImage:image];CGImageRelease(image);
+  assert([[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}]writeToFile:[NSString stringWithUTF8String:argv[1]] atomically:YES]);
+ }
  [box.alert.buttons[0] performClick:nil];wait_ready(key,0,1);assert(pcc_gui_message_box_cancel(key)==0);assert(pcc_gui_message_box_release(key)==0);assert(pcc_gui_message_box_release(key)==2);
  assert(pcc_gui_message_box_poll(key,&ready,&response,&checked)==2);
  NSWindow *parent=[[NSWindow alloc]initWithContentRect:NSMakeRect(100,100,360,180) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];parent.releasedWhenClosed=NO;[parent makeKeyAndOrderFront:nil];
