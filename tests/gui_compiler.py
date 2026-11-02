@@ -31,4 +31,9 @@ def write_metal_render_bridge(out_dir: str | Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     output = out_dir / METAL_BRIDGE_SOURCE.name
     output.write_bytes(METAL_BRIDGE_SOURCE.read_bytes())
+    # The canonical bridge now owns transitive clipboard/dialog includes.
+    # Preserve their exact bytes when staging an isolated consumer build.
+    for source in sorted(METAL_BRIDGE_SOURCE.parent.iterdir()):
+        if source.is_file() and source.suffix in {".h", ".inc"}:
+            (out_dir / source.name).write_bytes(source.read_bytes())
     return output
