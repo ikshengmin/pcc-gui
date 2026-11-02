@@ -16,6 +16,7 @@ int main(int argc,const char **argv){@autoreleasepool{
  assert(pcc_gui_message_box_poll(key,&ready,&response,&checked)==0&&ready==0&&response==12&&checked==13);
  assert(pcc_gui_message_box_poll(key,&ready,&ready,&checked)==2);
  PccGuiMessageBox *box=pcc_dialog_get(key);box.alert.suppressionButton.state=NSControlStateValueOn;
+ for(int i=0;i<5;i++)spin();
  if(argc>1){NSView *view=box.alert.window.contentView;[view display];NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];[view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];assert([[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}]writeToFile:[NSString stringWithUTF8String:argv[1]] atomically:YES]);}
  [box.alert.buttons[0] performClick:nil];wait_ready(key,0,1);assert(pcc_gui_message_box_cancel(key)==0);assert(pcc_gui_message_box_release(key)==0);assert(pcc_gui_message_box_release(key)==2);
  assert(pcc_gui_message_box_poll(key,&ready,&response,&checked)==2);

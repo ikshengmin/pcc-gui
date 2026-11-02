@@ -71,6 +71,7 @@ int64_t pcc_gui_message_box_begin(int64_t key,void *parent){
   for(NSUInteger i=0;i<box.labels.count;i++){NSButton *button=[box.alert addButtonWithTitle:box.labels[i]];button.tag=(NSInteger)i;button.target=box;button.action=@selector(clicked:);button.keyEquivalent=@"";}
   if(box.defaultId>=0)box.alert.buttons[(NSUInteger)box.defaultId].keyEquivalent=@"\r";
   if(box.cancelId!=box.defaultId)box.alert.buttons[(NSUInteger)box.cancelId].keyEquivalent=@"\e";
+  [box.alert layout];
   box.alert.window.title=box.title;box.parent=owner;box.phase=1;pcc_dialog_active=box.key;
   if(owner){
    __weak PccGuiMessageBox *weakBox=box;
