@@ -64,3 +64,26 @@ text, write-failure preservation, short-buffer guards, stale handles and all
 nine worker-thread rejections. No general clipboard content was read or written.
 This clang/AppKit pass does not qualify installed PCC1, translated Electron
 services or a complete Harness GUI.
+
+### Native message-box ownership
+
+`pcc_gui_dialog.h` exposes main-thread message-box leases. Configure UTF8 text
+(including NUL), style and buttons before begin. Begin selects an existing owned
+NSWindow by pointer identity in NSApp's window inventory, or NULL for an
+application-modal session. Only one owned message box may be active; busy returns
+5 without starting another. No interpreter graph or callback is stored natively.
+
+The app owner continues its native event pump and polls the key. Polling advances
+one application-modal turn; sheets complete through their native callback. Ready
+results retain response index and suppression-checkbox state until explicit
+release. Pending outputs preserve response/checked sentinels. Cancellation is
+idempotent after completion; pending release refuses. Parent close cancels the
+owned sheet without replacing window delegates. Keys never alias recycled objects.
+A foreign active modal session is never stopped by this API.
+
+Styles 0/1/2 are AppKit informational/warning/critical. Default ID -1 disables a
+return-key default; cancel ID must name an actual button. Empty button lists add
+OK. Text is bounded to 1 MiB and button count to 32. Custom icons, file panels,
+multiple concurrent modal owners, source Electron normalization and production
+translation/native event wiring remain separate. Native clang/AppKit tests and
+installed PCC1 qualification are separate evidence.
