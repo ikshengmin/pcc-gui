@@ -58,5 +58,9 @@ back. Snapshots/leases never contain Python/T2 objects or callbacks.
 test uses only unique private named pasteboards, checks native data independently,
 and exercises NUL/Unicode/empty text, immutable snapshots, stale keys, short
 buffers, worker-thread rejection and repeated release. The implementation is
-published before qualification; a clang/AppKit pass does not qualify installed
-PCC1, translated Electron services or a complete Harness GUI.
+published before qualification. The 2026-11-02 native run passed 32 cycles and
+64 immutable snapshots, with independent AppKit text checks, NUL/Unicode/empty
+text, write-failure preservation, short-buffer guards, stale handles and all
+nine worker-thread rejections. No general clipboard content was read or written.
+This clang/AppKit pass does not qualify installed PCC1, translated Electron
+services or a complete Harness GUI.
