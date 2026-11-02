@@ -87,3 +87,9 @@ OK. Text is bounded to 1 MiB and button count to 32. Custom icons, file panels,
 multiple concurrent modal owners, source Electron normalization and production
 translation/native event wiring remain separate. Native clang/AppKit tests and
 installed PCC1 qualification are separate evidence.
+
+The parent pointer follows the existing live-owned-window handle contract;
+message-box keys have independent stale-key protection. The integration fixture
+captures only its own window through the host-provided capture symbol because
+view-cache snapshots omit system-composited alert controls on the tested macOS.
+This capture path is test-only and does not establish general screen capture.

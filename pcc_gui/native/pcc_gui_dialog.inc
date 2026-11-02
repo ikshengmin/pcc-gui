@@ -96,7 +96,7 @@ int64_t pcc_gui_message_box_poll(int64_t key,int64_t *ready,int64_t *response,in
  }
 }
 int64_t pcc_gui_message_box_cancel(int64_t key){
- if(![NSThread isMainThread])return 2;PccGuiMessageBox *box=pcc_dialog_get(key);if(!box||box.phase==0)return 2;if(box.phase==2)return 0;
+ if(![NSThread isMainThread])return 2;PccGuiMessageBox *box=pcc_dialog_get(key);if(!box||box.phase==0)return 2;if(box.phase==3)return 4;if(box.phase==2)return 0;
  box.selected=NSAlertFirstButtonReturn+box.cancelId;
  if(box.parent)[box.parent endSheet:box.alert.window returnCode:box.selected];else if(box.modal&&NSApp.modalWindow==box.alert.window)[NSApp stopModalWithCode:box.selected];return 0;
 }
