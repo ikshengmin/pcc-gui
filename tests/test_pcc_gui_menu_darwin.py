@@ -25,4 +25,4 @@ def test_native_menu_ownership(tmp_path: Path) -> None:
     run = subprocess.run([str(executable), str(tmp_path / "menu.png")],
                          env=env, capture_output=True, text=True, timeout=40)
     assert run.returncode == 0, run.stdout + run.stderr
-    assert run.stdout == "PCC_NATIVE_MENU_OK popup=1 parent_close=1 window_menu=1 origin=2 stale=1 thread=1 counts=0\n"
+    assert run.stdout == "PCC_NATIVE_MENU_OK popup=2 parent_close=1 window_menu=1 origin=2 overflow=1 stale=1 thread=1 counts=0\n"

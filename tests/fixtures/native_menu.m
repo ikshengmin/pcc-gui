@@ -65,11 +65,17 @@ int main(int argc,char **argv){@autoreleasepool{
  [[NSRunLoop mainRunLoop]addTimer:choose forMode:NSEventTrackingRunLoopMode];[[NSRunLoop mainRunLoop]addTimer:choose forMode:NSRunLoopCommonModes];
  CHECK(pcc_gui_menu_popup(root,handle,40,60,-1)==0);CHECK(selected&&busy&&screenshot);[choose invalidate];
  CHECK(pcc_gui_menu_remove(root,0)==5);int64_t command=0;int events=drain(root,&command);CHECK(events>=3&&command==41);
+ // AppKit can start tracking an installed menu without entering our popup API.
+ __block BOOL native_owned=NO;NSTimer *native_cancel=[NSTimer timerWithTimeInterval:0.10 repeats:NO block:^(NSTimer *timer){native_owned=pcc_menu_tracking==0&&pcc_gui_menu_cancel(other)==5&&pcc_menu_open_count>0;CHECK(pcc_gui_menu_cancel(root)==0);}];
+ [[NSRunLoop mainRunLoop]addTimer:native_cancel forMode:NSEventTrackingRunLoopMode];[[NSRunLoop mainRunLoop]addTimer:native_cancel forMode:NSRunLoopCommonModes];
+ [pcc_menu_get(root).native popUpMenuPositioningItem:nil atLocation:NSMakePoint(40,420) inView:window.contentView];[native_cancel invalidate];CHECK(native_owned);CHECK(drain(root,&command)>=2);
  // A parent's close notification cancels only this owned tracking operation.
  __block BOOL parent_closed=NO;NSTimer *closing=[NSTimer timerWithTimeInterval:0.10 repeats:NO block:^(NSTimer *timer){[window close];parent_closed=YES;}];
  [[NSRunLoop mainRunLoop]addTimer:closing forMode:NSEventTrackingRunLoopMode];[[NSRunLoop mainRunLoop]addTimer:closing forMode:NSRunLoopCommonModes];
  CHECK(pcc_gui_menu_popup(root,handle,40,60,-1)==0&&parent_closed);[closing invalidate];command=0;CHECK(drain(root,&command)>=2&&command==0);
  CHECK(pcc_gui_menu_remove(root,0)==0);CHECK(pcc_gui_menu_item_text(first,0,"retired",7)==2);CHECK(pcc_gui_menu_release(root)==0);CHECK(pcc_gui_menu_count(root,&count)==2);CHECK(pcc_menu_get(child).parent==nil);CHECK(pcc_gui_menu_release(child)==0);CHECK(pcc_gui_menu_release(other)==0);
+ int64_t overflow=create_menu();add_item(overflow,0,0,71,"Overflow");for(int i=0;i<257;i++)[pcc_menu_get(overflow).native performActionForItemAtIndex:0];
+ int64_t ready=11,sequence=12,kind=13,item=14,token=15;CHECK(pcc_gui_menu_event_peek(overflow,&ready,&sequence,&kind,&item,&token)==6);CHECK(ready==11&&sequence==12&&kind==13&&item==14&&token==15);CHECK(pcc_gui_menu_release(overflow)==0);
  int64_t menus=-1,items=-1;CHECK(pcc_gui_menu_live_count(&menus,&items)==0&&menus==0&&items==0);CHECK(pcc_menu_open_count==0&&pcc_menu_tracking==0);CHECK(pcc_gui_metal_window_close(handle)==0);
- printf("PCC_NATIVE_MENU_OK popup=1 parent_close=1 window_menu=1 origin=2 stale=1 thread=1 counts=0\n");return 0;
+ printf("PCC_NATIVE_MENU_OK popup=2 parent_close=1 window_menu=1 origin=2 overflow=1 stale=1 thread=1 counts=0\n");return 0;
 }}
