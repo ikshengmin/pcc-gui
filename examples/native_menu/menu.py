@@ -12,8 +12,12 @@ def main() -> int:
         return 1
     create_window = dynamic_library_symbol(library, cstr("pcc_gui_metal_window_create"))
     close_window = dynamic_library_symbol(library, cstr("pcc_gui_metal_window_close"))
+    show_window = dynamic_library_symbol(library, cstr("pcc_gui_metal_window_show"))
     window = call_ptr_i64_i64(create_window, cstr("PCC owned menu"), 600, 400)
     if ptr_is_null(window):
+        return 2
+    if call_i64_ptr1(show_window, window) != 0:
+        call_i64_ptr1(close_window, window)
         return 2
     result = stack_alloc(8)
     menu_out = stack_alloc(8)
