@@ -26,14 +26,24 @@ static BOOL capture_owned_menu(const char *path){
  typedef CGImageRef(*Capture)(CGRect,CGWindowListOption,CGWindowID,CGWindowImageOption);
  Capture capture=(Capture)dlsym(RTLD_DEFAULT,"CGWindowListCreateImage");if(!capture)return NO;
  CFArrayRef list=CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly,kCGNullWindowID);if(!list)return NO;
- BOOL saved=NO;
+ BOOL saved=NO;NSMutableArray *owned=[NSMutableArray new];int candidate=0;
  for(NSDictionary *row in (__bridge NSArray *)list){
   if([row[(__bridge NSString *)kCGWindowOwnerPID] intValue]!=getpid()||[row[(__bridge NSString *)kCGWindowLayer] intValue]<=0)continue;
+  [owned addObject:row];
   CGWindowID key=[row[(__bridge NSString *)kCGWindowNumber] unsignedIntValue];CGImageRef image=capture(CGRectNull,kCGWindowListOptionIncludingWindow,key,kCGWindowImageBoundsIgnoreFraming);
   if(!image)continue;
-  if(CGImageGetWidth(image)>80&&CGImageGetHeight(image)>40){NSBitmapImageRep *bitmap=[[NSBitmapImageRep alloc]initWithCGImage:image];NSData *png=[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];saved=[png writeToFile:[NSString stringWithUTF8String:path] atomically:YES];}
-  CGImageRelease(image);if(saved)break;
+  size_t width=CGImageGetWidth(image),height=CGImageGetHeight(image);
+  if(width>80&&height>40&&width<=4096&&height<=4096){
+   NSBitmapImageRep *bitmap=[[NSBitmapImageRep alloc]initWithCGImage:image];NSData *png=[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];NSString *output=[NSString stringWithUTF8String:path];
+   [png writeToFile:[output stringByAppendingFormat:@".candidate-%d.png",candidate++] atomically:YES];
+   // A menu's shadow window is a separate compositor surface. Require actual
+   // content beyond one opaque/alpha channel before choosing a visual receipt.
+   BOOL content=NO;if(CGImageGetBitsPerPixel(image)==32){CFDataRef pixels=CGDataProviderCopyData(CGImageGetDataProvider(image));size_t stride=CGImageGetBytesPerRow(image),bright=0;if(pixels&&(size_t)CFDataGetLength(pixels)>=stride*height){const UInt8 *bytes=CFDataGetBytePtr(pixels);for(size_t y=0;y<height;y++)for(size_t x=0;x<width*4;x++)if(bytes[y*stride+x]>128)bright++;content=bright>width*height+128;}if(pixels)CFRelease(pixels);}
+   if(content&&!saved)saved=[png writeToFile:output atomically:YES];
+  }
+  CGImageRelease(image);
  }
+ NSData *metadata=[NSJSONSerialization dataWithJSONObject:owned options:NSJSONWritingPrettyPrinted error:NULL];[metadata writeToFile:[[NSString stringWithUTF8String:path]stringByAppendingString:@".windows.json"] atomically:YES];
  CFRelease(list);return saved;
 }
 int main(int argc,char **argv){@autoreleasepool{
