@@ -81,14 +81,16 @@ static int64_t pcc_appearance_open_environment(NSApplication *application,NSNoti
 int64_t pcc_gui_appearance_open(int64_t *out){if(![NSThread isMainThread]||!pcc_appearance_output(out))return 2;if(!NSApp)return 4;NSApplication *app=NSApp;NSWorkspace *workspace=NSWorkspace.sharedWorkspace;return pcc_appearance_open_environment(app,workspace.notificationCenter,^int64_t{return pcc_appearance_flags(app,workspace);},out);}
 int64_t pcc_gui_appearance_set_source(int64_t key,int64_t source){
  if(![NSThread isMainThread]||source<0||source>2)return 2;PccGuiAppearance *owner=pcc_appearance_get(key);if(!owner)return 2;if(owner.failure)return owner.failure;
- pthread_mutex_lock(&owner->lock);BOOL busy=owner->mutating;pthread_mutex_unlock(&owner->lock);if(busy||owner.application.appearance!=owner.installed)return 5;
- NSAppearance *selected=source==0?nil:[NSAppearance appearanceNamed:source==1?NSAppearanceNameAqua:NSAppearanceNameDarkAqua];if(source&&!selected)return 4;
- NSAppearance *oldInstalled=owner.installed;int64_t oldSource=owner.source;BOOL oldWritten=owner.written;int64_t status=0;
- pthread_mutex_lock(&owner->lock);owner->mutating=YES;pthread_mutex_unlock(&owner->lock);owner.source=source;owner.installed=selected;owner.written=YES;
- @try{owner.application.appearance=selected;if(owner.application.appearance!=selected)status=5;}
- @catch(NSException *error){status=4;if(owner.application.appearance==oldInstalled){owner.installed=oldInstalled;owner.source=oldSource;owner.written=oldWritten;}}
- @finally{int64_t sampled=pcc_appearance_sample(owner,NO);if(!status)status=sampled;pthread_mutex_lock(&owner->lock);owner->mutating=NO;pthread_mutex_unlock(&owner->lock);pcc_appearance_resume(owner);}
- return status;
+ pthread_mutex_lock(&owner->lock);BOOL busy=owner->mutating;if(!busy)owner->mutating=YES;pthread_mutex_unlock(&owner->lock);if(busy)return 5;
+ @try{
+  if(owner.application.appearance!=owner.installed)return 5;
+  NSAppearance *selected=source==0?nil:[NSAppearance appearanceNamed:source==1?NSAppearanceNameAqua:NSAppearanceNameDarkAqua];if(source&&!selected)return 4;
+  NSAppearance *oldInstalled=owner.installed;int64_t oldSource=owner.source;BOOL oldWritten=owner.written;int64_t status=0;
+  owner.source=source;owner.installed=selected;owner.written=YES;
+  @try{owner.application.appearance=selected;if(owner.application.appearance!=selected)status=5;}
+  @catch(NSException *error){status=4;if(owner.application.appearance==oldInstalled){owner.installed=oldInstalled;owner.source=oldSource;owner.written=oldWritten;}}
+  int64_t sampled=pcc_appearance_sample(owner,NO);return status?status:sampled;
+ }@catch(NSException *error){return 4;}@finally{pthread_mutex_lock(&owner->lock);owner->mutating=NO;pthread_mutex_unlock(&owner->lock);pcc_appearance_resume(owner);}
 }
 int64_t pcc_gui_appearance_snapshot(int64_t key,int64_t *source,int64_t *flags){
  if(![NSThread isMainThread]||!pcc_appearance_output(source)||!pcc_appearance_output(flags)||source==flags)return 2;PccGuiAppearance *owner=pcc_appearance_get(key);if(!owner)return 2;if(owner->mutating)return 5;int64_t status=pcc_appearance_sample(owner,NO);if(status)return status;*source=owner.source;*flags=owner.flags;return 0;
