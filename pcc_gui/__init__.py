@@ -31,3 +31,5 @@ from .pcc_gui_power import *
 
 from .pcc_gui_native_image import *
 from .pcc_gui_tray import *
+
+from .pcc_gui_appearance import *

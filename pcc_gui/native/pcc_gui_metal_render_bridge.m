@@ -10,6 +10,7 @@
 #include "pcc_gui_dialog.inc"
 #include "pcc_gui_menu.inc"
 #include "pcc_gui_power.inc"
+#include "pcc_gui_appearance.inc"
 #include "pcc_gui_native_image.inc"
 #include "pcc_gui_tray.inc"
 
