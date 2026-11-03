@@ -22,12 +22,18 @@ static int cancel_calls;
 @implementation PccMenuFlippedView
 - (BOOL)isFlipped{return YES;}
 @end
+@interface PccMenuFailureProbe : NSMenu
+@end
+@implementation PccMenuFailureProbe
+- (BOOL)popUpMenuPositioningItem:(NSMenuItem *)item atLocation:(NSPoint)point inView:(NSView *)view {[self.delegate menuWillOpen:self];@throw [NSException exceptionWithName:@"OwnedTestFailure" reason:@"after menuWillOpen" userInfo:nil];}
+- (void)cancelTracking {cancel_calls++;}
+@end
 static BOOL menu_image_has_content(CGImageRef image){
  if(!image||CGImageGetBitsPerPixel(image)!=32)return NO;size_t width=CGImageGetWidth(image),height=CGImageGetHeight(image),stride=CGImageGetBytesPerRow(image),colored=0;CFDataRef pixels=CGDataProviderCopyData(CGImageGetDataProvider(image));
  if(pixels&&(size_t)CFDataGetLength(pixels)>=stride*height){const UInt8 *bytes=CFDataGetBytePtr(pixels);for(size_t y=0;y<height;y++)for(size_t x=0;x<width;x++){int bright=0;for(int c=0;c<4;c++)if(bytes[y*stride+x*4+c]>128)bright++;if(bright>1)colored++;}}
  if(pixels)CFRelease(pixels);return colored>128;
 }
-static BOOL capture_owned_menu(const char *path,NSMenu *selectedMenu){
+static BOOL capture_owned_menu(const char *path){
  typedef CGImageRef(*Capture)(CGRect,CGWindowListOption,CGWindowID,CGWindowImageOption);
  Capture capture=(Capture)dlsym(RTLD_DEFAULT,"CGWindowListCreateImage");if(!capture)return NO;
  CFArrayRef list=CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly,kCGNullWindowID);if(!list)return NO;
@@ -35,10 +41,8 @@ static BOOL capture_owned_menu(const char *path,NSMenu *selectedMenu){
  for(NSDictionary *row in (__bridge NSArray *)list){
   if([row[(__bridge NSString *)kCGWindowOwnerPID] intValue]!=getpid()||[row[(__bridge NSString *)kCGWindowLayer] intValue]<=0)continue;
   [owned addObject:row];
-  CGWindowID key=[row[(__bridge NSString *)kCGWindowNumber] unsignedIntValue];NSWindow *ownedWindow=[NSApp windowWithWindowNumber:(NSInteger)key];NSWindowSharingType sharing=ownedWindow?ownedWindow.sharingType:NSWindowSharingNone;
-  if(ownedWindow)ownedWindow.sharingType=NSWindowSharingReadOnly;
+  CGWindowID key=[row[(__bridge NSString *)kCGWindowNumber] unsignedIntValue];NSWindow *ownedWindow=[NSApp windowWithWindowNumber:(NSInteger)key];
   CGImageRef image=capture(CGRectNull,kCGWindowListOptionIncludingWindow,key,kCGWindowImageBoundsIgnoreFraming);
-  if(ownedWindow)ownedWindow.sharingType=sharing;
   if(!image)continue;
   size_t width=CGImageGetWidth(image),height=CGImageGetHeight(image);
   if(width>80&&height>40&&width<=4096&&height<=4096){
@@ -53,9 +57,7 @@ static BOOL capture_owned_menu(const char *path,NSMenu *selectedMenu){
   CGImageRelease(image);
  }
  NSMutableArray *appWindows=[NSMutableArray new];for(NSWindow *window in NSApp.windows)[appWindows addObject:@{@"number":@(window.windowNumber),@"class":NSStringFromClass(window.class),@"visible":@(window.visible),@"level":@(window.level),@"sharing":@(window.sharingType)}];
- id representation=[selectedMenu menuRepresentation];NSString *representationClass=representation?NSStringFromClass([representation class]):@"nil";
- if([representation isKindOfClass:NSView.class]){NSView *view=representation;NSBitmapImageRep *bitmap=[view bitmapImageRepForCachingDisplayInRect:view.bounds];if(bitmap){[view cacheDisplayInRect:view.bounds toBitmapImageRep:bitmap];NSData *png=[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];[png writeToFile:[[NSString stringWithUTF8String:path]stringByAppendingString:@".view.png"] atomically:YES];}}
- NSData *metadata=[NSJSONSerialization dataWithJSONObject:@{@"windows":owned,@"app_windows":appWindows,@"representation":representationClass} options:NSJSONWritingPrettyPrinted error:NULL];[metadata writeToFile:[[NSString stringWithUTF8String:path]stringByAppendingString:@".windows.json"] atomically:YES];
+ NSData *metadata=[NSJSONSerialization dataWithJSONObject:@{@"windows":owned,@"app_windows":appWindows,@"view_fallback":@YES} options:NSJSONWritingPrettyPrinted error:NULL];[metadata writeToFile:[[NSString stringWithUTF8String:path]stringByAppendingString:@".windows.json"] atomically:YES];
  CFRelease(list);return saved;
 }
 int main(int argc,char **argv){@autoreleasepool{
@@ -82,7 +84,7 @@ int main(int argc,char **argv){@autoreleasepool{
  __block BOOL selected=NO,screenshot=NO,busy=NO;
  NSTimer *choose=[NSTimer timerWithTimeInterval:0.20 repeats:NO block:^(NSTimer *timer){
   busy=pcc_gui_menu_cancel(other)==5&&pcc_gui_menu_release(root)==5&&pcc_gui_menu_item_state(first,3,0,NULL,0)==5;
-  screenshot=capture_owned_menu(argv[1],pcc_menu_get(root).native);[pcc_menu_get(root).native performActionForItemAtIndex:0];selected=YES;CHECK(pcc_gui_menu_cancel(root)==0);
+  screenshot=capture_owned_menu(argv[1]);[pcc_menu_get(root).native performActionForItemAtIndex:0];selected=YES;CHECK(pcc_gui_menu_cancel(root)==0);
  }];
  [[NSRunLoop mainRunLoop]addTimer:choose forMode:NSEventTrackingRunLoopMode];[[NSRunLoop mainRunLoop]addTimer:choose forMode:NSRunLoopCommonModes];
  CHECK(pcc_gui_menu_popup(root,handle,40,60,-1)==0);CHECK(selected&&busy&&screenshot);[choose invalidate];
@@ -91,6 +93,8 @@ int main(int argc,char **argv){@autoreleasepool{
  __block BOOL native_owned=NO;NSTimer *native_cancel=[NSTimer timerWithTimeInterval:0.10 repeats:NO block:^(NSTimer *timer){native_owned=pcc_menu_tracking==0&&pcc_gui_menu_cancel(other)==5&&pcc_menu_open_count>0;CHECK(pcc_gui_menu_cancel(root)==0);}];
  [[NSRunLoop mainRunLoop]addTimer:native_cancel forMode:NSEventTrackingRunLoopMode];[[NSRunLoop mainRunLoop]addTimer:native_cancel forMode:NSRunLoopCommonModes];
  [pcc_menu_get(root).native popUpMenuPositioningItem:nil atLocation:NSMakePoint(40,420) inView:window.contentView];[native_cancel invalidate];CHECK(native_owned);CHECK(drain(root,&command)>=2);
+ int64_t failed=create_menu();PccGuiMenu *failedMenu=pcc_menu_get(failed);failedMenu.native=[PccMenuFailureProbe new];failedMenu.native.delegate=failedMenu;
+ CHECK(pcc_gui_menu_popup(failed,handle,0,0,-1)==4);CHECK(pcc_menu_open_count==0&&pcc_menu_tracking==0);CHECK(pcc_gui_menu_release(failed)==0);
  // A parent's close notification cancels only this owned tracking operation.
  __block BOOL parent_closed=NO;NSTimer *closing=[NSTimer timerWithTimeInterval:0.10 repeats:NO block:^(NSTimer *timer){[window close];parent_closed=YES;}];
  [[NSRunLoop mainRunLoop]addTimer:closing forMode:NSEventTrackingRunLoopMode];[[NSRunLoop mainRunLoop]addTimer:closing forMode:NSRunLoopCommonModes];
@@ -99,5 +103,5 @@ int main(int argc,char **argv){@autoreleasepool{
  int64_t overflow=create_menu();add_item(overflow,0,0,71,"Overflow");for(int i=0;i<257;i++)[pcc_menu_get(overflow).native performActionForItemAtIndex:0];
  int64_t ready=11,sequence=12,kind=13,item=14,token=15;CHECK(pcc_gui_menu_event_peek(overflow,&ready,&sequence,&kind,&item,&token)==6);CHECK(ready==11&&sequence==12&&kind==13&&item==14&&token==15);CHECK(pcc_gui_menu_release(overflow)==0);
  int64_t menus=-1,items=-1;CHECK(pcc_gui_menu_live_count(&menus,&items)==0&&menus==0&&items==0);CHECK(pcc_menu_open_count==0&&pcc_menu_tracking==0);CHECK(pcc_gui_metal_window_close(handle)==0);
- printf("PCC_NATIVE_MENU_OK popup=2 parent_close=1 window_menu=1 origin=2 overflow=1 stale=1 thread=1 counts=0\n");return 0;
+ printf("PCC_NATIVE_MENU_OK popup=2 parent_close=1 window_menu=1 origin=2 overflow=1 fault=1 stale=1 thread=1 counts=0\n");return 0;
 }}

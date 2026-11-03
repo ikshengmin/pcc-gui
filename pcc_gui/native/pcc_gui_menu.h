@@ -23,7 +23,8 @@ int64_t pcc_gui_menu_count(int64_t menu,int64_t *out_count);
 int64_t pcc_gui_menu_set_application(int64_t menu);
 /* Synchronous native tracking. Coordinates are logical points from the
  * parent's content top-left. Parent must be a caller-owned live window.
- * No Python/T2 callback runs in the native tracking loop. */
+ * No Python/T2 callback runs in the native tracking loop. A native exception
+ * fails this lease with status 4 and leaves it available for explicit release. */
 int64_t pcc_gui_menu_popup(int64_t menu,void *parent,int64_t x,int64_t y,int64_t positioning_index);
 int64_t pcc_gui_menu_cancel(int64_t menu);
 /* Root queue: kind 1 opened, 2 command, 3 closed. For kind 1/3 the item cell

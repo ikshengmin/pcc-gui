@@ -31,6 +31,7 @@ static PccGuiMenuItem *pcc_menu_item(int64_t key){return key>0?pcc_menu_items[@(
 static PccGuiMenu *pcc_menu_root(PccGuiMenu *menu){while(menu.parent)menu=menu.parent.owner;return menu;}
 static BOOL pcc_menu_busy(PccGuiMenu *menu){PccGuiMenu *root=pcc_menu_root(menu);return root.tracking||pcc_menu_tracking!=0||pcc_menu_open_count!=0;}
 static int64_t pcc_menu_open_owner(void){int64_t owner=0;for(PccGuiMenu *menu in pcc_menus.allValues)if(menu.open){int64_t key=pcc_menu_root(menu).key;if(owner&&owner!=key)return -1;owner=key;}return owner;}
+static void pcc_menu_retire_failed_tracking(PccGuiMenu *menu){if(menu.open){menu.open=NO;pcc_menu_open_count--;}for(PccGuiMenuItem *item in menu.items)if(item.child)pcc_menu_retire_failed_tracking(item.child);}
 static int64_t pcc_menu_text(const void *bytes,int64_t length,NSString **out){
  if(length<0||(length&&!bytes))return 2;if(length>1048576)return 6;
  NSString *value=[[NSString alloc]initWithBytes:bytes length:(NSUInteger)length encoding:NSUTF8StringEncoding];if(!value)return 3;*out=value;return 0;
@@ -115,7 +116,7 @@ int64_t pcc_gui_menu_popup(int64_t key,void *parent,int64_t x,int64_t y,int64_t 
   __weak PccGuiMenu *weakMenu=menu;id observer=[[NSNotificationCenter defaultCenter]addObserverForName:NSWindowWillCloseNotification object:window queue:nil usingBlock:^(NSNotification *note){PccGuiMenu *owned=weakMenu;if(owned.tracking)pcc_gui_menu_cancel(owned.key);}];
   if(!observer)return 4;menu.tracking=YES;menu.cancelRequested=NO;pcc_menu_tracking=key;int64_t status=0;
   @try{NSView *view=window.contentView;NSPoint point=NSMakePoint(NSMinX(view.bounds)+(CGFloat)x,view.isFlipped?NSMinY(view.bounds)+(CGFloat)y:NSMaxY(view.bounds)-(CGFloat)y);NSMenuItem *selected=positioning>=0?menu.items[(NSUInteger)positioning].native:nil;[menu.native popUpMenuPositioningItem:selected atLocation:point inView:view];}
-  @catch(NSException *error){status=4;}
+  @catch(NSException *error){status=4;menu.failure=4;@try{if(pcc_menu_open_owner()==key)[menu.native cancelTracking];}@catch(NSException *cancelError){}pcc_menu_retire_failed_tracking(menu);}
   @finally{[[NSNotificationCenter defaultCenter]removeObserver:observer];menu.tracking=NO;menu.cancelRequested=NO;pcc_menu_tracking=0;}
   return menu.failure?menu.failure:status;
  }
