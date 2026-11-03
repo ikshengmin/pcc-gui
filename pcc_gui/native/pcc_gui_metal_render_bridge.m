@@ -8,6 +8,7 @@
 #include <string.h>
 #include "pcc_gui_clipboard.inc"
 #include "pcc_gui_dialog.inc"
+#include "pcc_gui_menu.inc"
 
 static char pcc_render_last_error[512];
 static uint64_t pcc_last_click = 0;  /* 0 = none, else packed (y<<32)|x */

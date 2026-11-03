@@ -26,3 +26,4 @@ from . import pcc_gui_theme_anim  # noqa: F401
 from . import pcc_gui_window  # noqa: F401
 
 from .pcc_gui_dialog import *
+from .pcc_gui_menu import *
