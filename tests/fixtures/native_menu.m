@@ -22,7 +22,7 @@ static int cancel_calls;
 @implementation PccMenuFlippedView
 - (BOOL)isFlipped{return YES;}
 @end
-static BOOL capture_owned_menu(const char *path){
+static BOOL capture_owned_menu(const char *path,NSMenu *selectedMenu){
  typedef CGImageRef(*Capture)(CGRect,CGWindowListOption,CGWindowID,CGWindowImageOption);
  Capture capture=(Capture)dlsym(RTLD_DEFAULT,"CGWindowListCreateImage");if(!capture)return NO;
  CFArrayRef list=CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly,kCGNullWindowID);if(!list)return NO;
@@ -46,7 +46,10 @@ static BOOL capture_owned_menu(const char *path){
   }
   CGImageRelease(image);
  }
- NSData *metadata=[NSJSONSerialization dataWithJSONObject:owned options:NSJSONWritingPrettyPrinted error:NULL];[metadata writeToFile:[[NSString stringWithUTF8String:path]stringByAppendingString:@".windows.json"] atomically:YES];
+ NSMutableArray *appWindows=[NSMutableArray new];for(NSWindow *window in NSApp.windows)[appWindows addObject:@{@"number":@(window.windowNumber),@"class":NSStringFromClass(window.class),@"visible":@(window.visible),@"level":@(window.level),@"sharing":@(window.sharingType)}];
+ id representation=[selectedMenu menuRepresentation];NSString *representationClass=representation?NSStringFromClass([representation class]):@"nil";
+ if([representation isKindOfClass:NSView.class]){NSView *view=representation;NSBitmapImageRep *bitmap=[view bitmapImageRepForCachingDisplayInRect:view.bounds];if(bitmap){[view cacheDisplayInRect:view.bounds toBitmapImageRep:bitmap];NSData *png=[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];[png writeToFile:[[NSString stringWithUTF8String:path]stringByAppendingString:@".view.png"] atomically:YES];}}
+ NSData *metadata=[NSJSONSerialization dataWithJSONObject:@{@"windows":owned,@"app_windows":appWindows,@"representation":representationClass} options:NSJSONWritingPrettyPrinted error:NULL];[metadata writeToFile:[[NSString stringWithUTF8String:path]stringByAppendingString:@".windows.json"] atomically:YES];
  CFRelease(list);return saved;
 }
 int main(int argc,char **argv){@autoreleasepool{
@@ -73,7 +76,7 @@ int main(int argc,char **argv){@autoreleasepool{
  __block BOOL selected=NO,screenshot=NO,busy=NO;
  NSTimer *choose=[NSTimer timerWithTimeInterval:0.20 repeats:NO block:^(NSTimer *timer){
   busy=pcc_gui_menu_cancel(other)==5&&pcc_gui_menu_release(root)==5&&pcc_gui_menu_item_state(first,3,0,NULL,0)==5;
-  screenshot=capture_owned_menu(argv[1]);[pcc_menu_get(root).native performActionForItemAtIndex:0];selected=YES;CHECK(pcc_gui_menu_cancel(root)==0);
+  screenshot=capture_owned_menu(argv[1],pcc_menu_get(root).native);[pcc_menu_get(root).native performActionForItemAtIndex:0];selected=YES;CHECK(pcc_gui_menu_cancel(root)==0);
  }];
  [[NSRunLoop mainRunLoop]addTimer:choose forMode:NSEventTrackingRunLoopMode];[[NSRunLoop mainRunLoop]addTimer:choose forMode:NSRunLoopCommonModes];
  CHECK(pcc_gui_menu_popup(root,handle,40,60,-1)==0);CHECK(selected&&busy&&screenshot);[choose invalidate];
