@@ -30,7 +30,10 @@ static BOOL capture_owned_menu(const char *path){
  for(NSDictionary *row in (__bridge NSArray *)list){
   if([row[(__bridge NSString *)kCGWindowOwnerPID] intValue]!=getpid()||[row[(__bridge NSString *)kCGWindowLayer] intValue]<=0)continue;
   [owned addObject:row];
-  CGWindowID key=[row[(__bridge NSString *)kCGWindowNumber] unsignedIntValue];CGImageRef image=capture(CGRectNull,kCGWindowListOptionIncludingWindow,key,kCGWindowImageBoundsIgnoreFraming);
+  CGWindowID key=[row[(__bridge NSString *)kCGWindowNumber] unsignedIntValue];NSWindow *ownedWindow=[NSApp windowWithWindowNumber:(NSInteger)key];NSWindowSharingType sharing=ownedWindow?ownedWindow.sharingType:NSWindowSharingNone;
+  if(ownedWindow)ownedWindow.sharingType=NSWindowSharingReadOnly;
+  CGImageRef image=capture(CGRectNull,kCGWindowListOptionIncludingWindow,key,kCGWindowImageBoundsIgnoreFraming);
+  if(ownedWindow)ownedWindow.sharingType=sharing;
   if(!image)continue;
   size_t width=CGImageGetWidth(image),height=CGImageGetHeight(image);
   if(width>80&&height>40&&width<=4096&&height<=4096){
