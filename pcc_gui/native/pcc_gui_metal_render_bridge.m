@@ -298,6 +298,8 @@ int64_t pcc_gui_metal_render_offscreen(
 /* ---- Windowed path: NSWindow + CAMetalLayer + present ---- */
 
 static void pcc_install_app_menu(NSString *appName) {
+  /* Creating another window must preserve the application's selected menu. */
+  if (NSApp.mainMenu != nil) return;
   NSMenu *mainMenu = [[NSMenu alloc] init];
   NSMenuItem *appItem = [[NSMenuItem alloc] init];
   [mainMenu addItem:appItem];

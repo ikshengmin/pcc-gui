@@ -20,7 +20,7 @@
 @property(nonatomic,strong) NSMutableArray<PccGuiMenuEvent *> *events;
 @property(nonatomic,weak) PccGuiMenuItem *parent;
 @property(nonatomic) int64_t key,failure;
-@property(nonatomic) BOOL tracking,open;
+@property(nonatomic) BOOL tracking,open,cancelRequested;
 @end
 static NSMutableDictionary<NSNumber *,PccGuiMenu *> *pcc_menus;
 static NSMutableDictionary<NSNumber *,PccGuiMenuItem *> *pcc_menu_items;
@@ -30,14 +30,15 @@ static PccGuiMenu *pcc_menu_get(int64_t key){return key>0?pcc_menus[@(key)]:nil;
 static PccGuiMenuItem *pcc_menu_item(int64_t key){return key>0?pcc_menu_items[@(key)]:nil;}
 static PccGuiMenu *pcc_menu_root(PccGuiMenu *menu){while(menu.parent)menu=menu.parent.owner;return menu;}
 static BOOL pcc_menu_busy(PccGuiMenu *menu){PccGuiMenu *root=pcc_menu_root(menu);return root.tracking||pcc_menu_tracking!=0||pcc_menu_open_count!=0;}
+static int64_t pcc_menu_open_owner(void){int64_t owner=0;for(PccGuiMenu *menu in pcc_menus.allValues)if(menu.open){int64_t key=pcc_menu_root(menu).key;if(owner&&owner!=key)return -1;owner=key;}return owner;}
 static int64_t pcc_menu_text(const void *bytes,int64_t length,NSString **out){
  if(length<0||(length&&!bytes))return 2;if(length>1048576)return 6;
  NSString *value=[[NSString alloc]initWithBytes:bytes length:(NSUInteger)length encoding:NSUTF8StringEncoding];if(!value)return 3;*out=value;return 0;
 }
 static void pcc_menu_event(PccGuiMenu *menu,int64_t kind,PccGuiMenuItem *item){
  PccGuiMenu *root=pcc_menu_root(menu);if(!root||root.failure)return;
- if(root.events.count>=256||pcc_menu_sequence==INT64_MAX){root.failure=6;[root.native cancelTracking];return;}
- PccGuiMenuEvent *event=[PccGuiMenuEvent new];if(!event){root.failure=4;[root.native cancelTracking];return;}
+ if(root.events.count>=256||pcc_menu_sequence==INT64_MAX){root.failure=6;pcc_gui_menu_cancel(root.key);return;}
+ PccGuiMenuEvent *event=[PccGuiMenuEvent new];if(!event){root.failure=4;pcc_gui_menu_cancel(root.key);return;}
  event.sequence=pcc_menu_sequence++;event.kind=kind;event.item=item?item.key:menu.key;event.command=item?item.command:0;[root.events addObject:event];
 }
 @implementation PccGuiMenuItem
@@ -47,7 +48,7 @@ static void pcc_menu_event(PccGuiMenu *menu,int64_t kind,PccGuiMenuItem *item){
 }
 @end
 @implementation PccGuiMenu
-- (void)menuWillOpen:(NSMenu *)menu {if(menu==self.native){if(!self.open){self.open=YES;pcc_menu_open_count++;}pcc_menu_event(self,1,nil);}}
+- (void)menuWillOpen:(NSMenu *)menu {if(menu==self.native){if(!self.open){self.open=YES;pcc_menu_open_count++;}pcc_menu_event(self,1,nil);PccGuiMenu *root=pcc_menu_root(self);if(root.cancelRequested||root.failure)pcc_gui_menu_cancel(root.key);}}
 - (void)menuDidClose:(NSMenu *)menu {if(menu==self.native){if(self.open){self.open=NO;pcc_menu_open_count--;}pcc_menu_event(self,3,nil);}}
 @end
 static BOOL pcc_menu_output(int64_t *value){return value&&((uintptr_t)value%_Alignof(int64_t))==0;}
@@ -111,15 +112,15 @@ int64_t pcc_gui_menu_popup(int64_t key,void *parent,int64_t x,int64_t y,int64_t 
  PccGuiMenu *menu=pcc_menu_get(key);if(!menu||positioning< -1||positioning>=(int64_t)menu.items.count)return 2;if(menu.parent||pcc_menu_busy(menu)||menu.events.count)return 5;if(menu.failure)return menu.failure;
  NSWindow *window=nil;for(NSWindow *candidate in NSApp.windows)if((__bridge void *)candidate==parent){window=candidate;break;}if(!window||!window.contentView)return 2;
  @autoreleasepool{
-  __weak PccGuiMenu *weakMenu=menu;id observer=[[NSNotificationCenter defaultCenter]addObserverForName:NSWindowWillCloseNotification object:window queue:nil usingBlock:^(NSNotification *note){PccGuiMenu *owned=weakMenu;if(owned.tracking)[owned.native cancelTracking];}];
-  if(!observer)return 4;menu.tracking=YES;pcc_menu_tracking=key;int64_t status=0;
-  @try{NSView *view=window.contentView;NSPoint point=NSMakePoint((CGFloat)x,view.isFlipped?(CGFloat)y:NSHeight(view.bounds)-(CGFloat)y);NSMenuItem *selected=positioning>=0?menu.items[(NSUInteger)positioning].native:nil;[menu.native popUpMenuPositioningItem:selected atLocation:point inView:view];}
+  __weak PccGuiMenu *weakMenu=menu;id observer=[[NSNotificationCenter defaultCenter]addObserverForName:NSWindowWillCloseNotification object:window queue:nil usingBlock:^(NSNotification *note){PccGuiMenu *owned=weakMenu;if(owned.tracking)pcc_gui_menu_cancel(owned.key);}];
+  if(!observer)return 4;menu.tracking=YES;menu.cancelRequested=NO;pcc_menu_tracking=key;int64_t status=0;
+  @try{NSView *view=window.contentView;NSPoint point=NSMakePoint(NSMinX(view.bounds)+(CGFloat)x,view.isFlipped?NSMinY(view.bounds)+(CGFloat)y:NSMaxY(view.bounds)-(CGFloat)y);NSMenuItem *selected=positioning>=0?menu.items[(NSUInteger)positioning].native:nil;[menu.native popUpMenuPositioningItem:selected atLocation:point inView:view];}
   @catch(NSException *error){status=4;}
-  @finally{[[NSNotificationCenter defaultCenter]removeObserver:observer];menu.tracking=NO;pcc_menu_tracking=0;}
+  @finally{[[NSNotificationCenter defaultCenter]removeObserver:observer];menu.tracking=NO;menu.cancelRequested=NO;pcc_menu_tracking=0;}
   return menu.failure?menu.failure:status;
  }
 }
-int64_t pcc_gui_menu_cancel(int64_t key){if(![NSThread isMainThread])return 2;PccGuiMenu *menu=pcc_menu_get(key);if(!menu)return 2;PccGuiMenu *root=pcc_menu_root(menu);if(pcc_menu_tracking&&pcc_menu_tracking!=root.key)return 5;[root.native cancelTracking];return 0;}
+int64_t pcc_gui_menu_cancel(int64_t key){if(![NSThread isMainThread])return 2;PccGuiMenu *menu=pcc_menu_get(key);if(!menu)return 2;PccGuiMenu *root=pcc_menu_root(menu);if(pcc_menu_tracking&&pcc_menu_tracking!=root.key)return 5;int64_t owner=pcc_menu_open_owner();if(owner&&owner!=root.key)return 5;if(root.tracking)root.cancelRequested=YES;if(owner==root.key)[root.native cancelTracking];return 0;}
 int64_t pcc_gui_menu_event_peek(int64_t key,int64_t *ready,int64_t *sequence,int64_t *kind,int64_t *item,int64_t *command){
  int64_t *outputs[5]={ready,sequence,kind,item,command};if(![NSThread isMainThread])return 2;
  for(int i=0;i<5;i++){if(!pcc_menu_output(outputs[i]))return 2;for(int j=0;j<i;j++)if(outputs[i]==outputs[j])return 2;}
