@@ -22,6 +22,11 @@ static int cancel_calls;
 @implementation PccMenuFlippedView
 - (BOOL)isFlipped{return YES;}
 @end
+static BOOL menu_image_has_content(CGImageRef image){
+ if(!image||CGImageGetBitsPerPixel(image)!=32)return NO;size_t width=CGImageGetWidth(image),height=CGImageGetHeight(image),stride=CGImageGetBytesPerRow(image),colored=0;CFDataRef pixels=CGDataProviderCopyData(CGImageGetDataProvider(image));
+ if(pixels&&(size_t)CFDataGetLength(pixels)>=stride*height){const UInt8 *bytes=CFDataGetBytePtr(pixels);for(size_t y=0;y<height;y++)for(size_t x=0;x<width;x++){int bright=0;for(int c=0;c<4;c++)if(bytes[y*stride+x*4+c]>128)bright++;if(bright>1)colored++;}}
+ if(pixels)CFRelease(pixels);return colored>128;
+}
 static BOOL capture_owned_menu(const char *path,NSMenu *selectedMenu){
  typedef CGImageRef(*Capture)(CGRect,CGWindowListOption,CGWindowID,CGWindowImageOption);
  Capture capture=(Capture)dlsym(RTLD_DEFAULT,"CGWindowListCreateImage");if(!capture)return NO;
@@ -41,8 +46,9 @@ static BOOL capture_owned_menu(const char *path,NSMenu *selectedMenu){
    [png writeToFile:[output stringByAppendingFormat:@".candidate-%d.png",candidate++] atomically:YES];
    // A menu's shadow window is a separate compositor surface. Require actual
    // content beyond one opaque/alpha channel before choosing a visual receipt.
-   BOOL content=NO;if(CGImageGetBitsPerPixel(image)==32){CFDataRef pixels=CGDataProviderCopyData(CGImageGetDataProvider(image));size_t stride=CGImageGetBytesPerRow(image),bright=0;if(pixels&&(size_t)CFDataGetLength(pixels)>=stride*height){const UInt8 *bytes=CFDataGetBytePtr(pixels);for(size_t y=0;y<height;y++)for(size_t x=0;x<width*4;x++)if(bytes[y*stride+x]>128)bright++;content=bright>width*height+128;}if(pixels)CFRelease(pixels);}
+   BOOL content=menu_image_has_content(image);
    if(content&&!saved)saved=[png writeToFile:output atomically:YES];
+   if(ownedWindow){NSView *view=ownedWindow.contentView;NSBitmapImageRep *cached=[view bitmapImageRepForCachingDisplayInRect:view.bounds];if(cached){[view cacheDisplayInRect:view.bounds toBitmapImageRep:cached];NSData *viewPNG=[cached representationUsingType:NSBitmapImageFileTypePNG properties:@{}];[viewPNG writeToFile:[output stringByAppendingFormat:@".view-window-%u.png",key] atomically:YES];if(!saved&&menu_image_has_content(cached.CGImage))saved=[viewPNG writeToFile:output atomically:YES];}}
   }
   CGImageRelease(image);
  }
