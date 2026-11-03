@@ -27,4 +27,4 @@ def test_native_image_tray_ownership(tmp_path: Path) -> None:
     run = subprocess.run([str(executable), str(capture), str(image)],
                          env=env, capture_output=True, text=True, timeout=40)
     assert run.returncode == 0, run.stdout + run.stderr
-    assert run.stdout == "PCC_NATIVE_IMAGE_TRAY_OK copy=1 path=1 image_lease=1 menu_owner=1 click=1 popup=1 deferred_release=1 window_lifetime=1 overflow=1 thread=1 counts=0\n"
+    assert run.stdout == "PCC_NATIVE_IMAGE_TRAY_OK copy=1 init_failure=1 path=1 image_lease=1 menu_owner=1 click=1 popup=1 deferred_release=1 window_lifetime=1 overflow=1 thread=1 counts=0\n"

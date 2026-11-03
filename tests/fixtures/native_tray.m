@@ -1,5 +1,15 @@
 // Interact only with status items, menus, images and windows owned by this test.
+#import <AppKit/AppKit.h>
+#include <objc/runtime.h>
+static int cg_created,cg_released;
+static CGImageRef owned_cg_create(size_t w,size_t h,size_t bits,size_t pixel,size_t row,CGColorSpaceRef color,CGBitmapInfo info,CGDataProviderRef provider,const CGFloat *decode,bool interpolate,CGColorRenderingIntent intent){CGImageRef image=CGImageCreate(w,h,bits,pixel,row,color,info,provider,decode,interpolate,intent);if(image)cg_created++;return image;}
+static void owned_cg_release(CGImageRef image){if(image)cg_released++;CGImageRelease(image);}
+#define CGImageCreate owned_cg_create
+#define CGImageRelease owned_cg_release
 #include "../../pcc_gui/native/pcc_gui_metal_render_bridge.m"
+#undef CGImageCreate
+#undef CGImageRelease
+static id reject_image_init(id self,SEL selector,CGImageRef image,NSSize size){@throw [NSException exceptionWithName:@"OwnedImageInitFailure" reason:@"fixture" userInfo:nil];}
 #include <pthread.h>
 static void verify(BOOL ok,const char *expression,int line){if(!ok){fprintf(stderr,"tray assertion %d: %s\n",line,expression);exit(90);}}
 #define CHECK(x) verify((x),#x,__LINE__)
@@ -16,6 +26,7 @@ int main(int argc,char **argv){@autoreleasepool{
  CHECK(argc==3);[NSApplication sharedApplication];int64_t out=71,width=0,height=0,scale=0,is_template=0,empty=0;
  CHECK(pcc_gui_native_image_empty(&empty)==0);CHECK(pcc_gui_native_image_template(empty,1)==0);CHECK(pcc_gui_native_image_info(empty,&width,&height,&scale,&is_template)==0&&width==0&&height==0&&scale==1&&is_template==0);
  unsigned char bytes[80];memset(bytes,0,sizeof bytes);for(int y=0;y<4;y++)for(int x=0;x<4;x++){unsigned char *p=bytes+y*20+x*4;p[0]=x<2?220:30;p[1]=x<2?35:175;p[2]=y<2?55:220;p[3]=y<2?255:140;}
+ Method initializer=class_getInstanceMethod(NSImage.class,@selector(initWithCGImage:size:));IMP original=method_setImplementation(initializer,(IMP)reject_image_init);int created_before=cg_created,released_before=cg_released;@try{CHECK(pcc_gui_native_image_rgba(bytes,80,4,4,20,1,&out)==4&&out==71);}@finally{method_setImplementation(initializer,original);}CHECK(cg_created==created_before+1&&cg_released==released_before+1);
  int64_t image=0;CHECK(pcc_gui_native_image_rgba(bytes,80,4,4,20,1,&image)==0);CHECK(pcc_gui_native_image_info(image,&width,&height,&scale,&is_template)==0&&width==4&&height==4&&scale==1);memset(bytes,0,sizeof bytes);CHECK(((const unsigned char *)pcc_native_image_get(image).backing.bytes)[0]==220);
  CHECK(pcc_gui_native_image_rgba(bytes,80,4097,1,20,1,&out)==6&&out==71);CHECK(pcc_gui_native_image_rgba(bytes,80,4,4,0,1,&out)==2&&out==71);CHECK(pcc_gui_native_image_info(image,&out,&out,&out,&out)==2&&out==71);
  CHECK(pcc_gui_native_image_template(image,1)==0);CHECK(pcc_gui_native_image_info(image,&width,&height,&scale,&is_template)==0&&is_template==1);CHECK(pcc_gui_native_image_template(image,0)==0);
@@ -32,6 +43,6 @@ int main(int argc,char **argv){@autoreleasepool{
  pthread_t thread;CHECK(pthread_create(&thread,NULL,wrong_thread,&tray)==0);CHECK(pthread_join(thread,NULL)==0);
  __block BOOL retired=NO;NSTimer *retire=[NSTimer timerWithTimeInterval:0.15 repeats:NO block:^(NSTimer *timer){CHECK(pcc_gui_tray_release(tray)==0);CHECK(pcc_gui_tray_release(tray)==2);retired=YES;}];schedule(retire);CHECK(pcc_gui_tray_popup(tray)==0&&retired);[retire invalidate];CHECK(owned.native==nil&&owned.retiring);CHECK(pcc_menu_get(menu).externalOwner==nil);CHECK(drain_menu(menu)>=2);CHECK(pcc_gui_menu_release(menu)==0);
  [window close];CHECK(pcc_gui_tray_tooltip(other,"survives window close",21)==0);PccGuiTray *remaining=pcc_tray_get(other);for(int i=0;i<257;i++)pcc_tray_publish(remaining,1,0);out=71;CHECK(pcc_gui_tray_event_peek(other,&out,&sequence,&kind,&flags)==6&&out==71);CHECK(pcc_gui_tray_release(other)==0);pcc_tray_publish(remaining,1,0);CHECK(remaining.events.count==0);
- CHECK(pcc_gui_native_image_release(empty)==0);CHECK(pcc_gui_native_image_live_count(&out)==0&&out==0);CHECK(pcc_gui_tray_live_count(&out)==0&&out==0);int64_t menus=0,items=0;CHECK(pcc_gui_menu_live_count(&menus,&items)==0&&menus==0&&items==0);pcc_gui_metal_window_destroy(handle);
- puts("PCC_NATIVE_IMAGE_TRAY_OK copy=1 path=1 image_lease=1 menu_owner=1 click=1 popup=1 deferred_release=1 window_lifetime=1 overflow=1 thread=1 counts=0");
+ CHECK(pcc_gui_native_image_release(empty)==0);CHECK(pcc_gui_native_image_live_count(&out)==0&&out==0);CHECK(pcc_gui_tray_live_count(&out)==0&&out==0);int64_t menus=0,items=0;CHECK(pcc_gui_menu_live_count(&menus,&items)==0&&menus==0&&items==0);CHECK(pcc_gui_metal_window_close(handle)==0);
+ puts("PCC_NATIVE_IMAGE_TRAY_OK copy=1 init_failure=1 path=1 image_lease=1 menu_owner=1 click=1 popup=1 deferred_release=1 window_lifetime=1 overflow=1 thread=1 counts=0");
 }return 0;}

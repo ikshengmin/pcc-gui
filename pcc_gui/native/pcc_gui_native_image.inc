@@ -28,7 +28,7 @@ int64_t pcc_gui_native_image_rgba(const void *data,int64_t length,int64_t width,
   if(!provider||!color){if(provider)CGDataProviderRelease(provider);if(color)CGColorSpaceRelease(color);return 4;}
   CGImageRef cg=CGImageCreate((size_t)width,(size_t)height,8,32,(size_t)stride,color,kCGBitmapByteOrder32Big|kCGImageAlphaLast,provider,NULL,NO,kCGRenderingIntentDefault);
   CGDataProviderRelease(provider);CGColorSpaceRelease(color);if(!cg)return 4;
-  NSImage *image=[[NSImage alloc]initWithCGImage:cg size:NSMakeSize((CGFloat)width/(CGFloat)scale,(CGFloat)height/(CGFloat)scale)];CGImageRelease(cg);if(!image)return 4;
+  NSImage *image=nil;@try{image=[[NSImage alloc]initWithCGImage:cg size:NSMakeSize((CGFloat)width/(CGFloat)scale,(CGFloat)height/(CGFloat)scale)];}@finally{CGImageRelease(cg);}if(!image)return 4;
   return pcc_native_image_publish(image,copy,width,height,scale,out);
  }@catch(NSException *exception){return 4;}}
 }
