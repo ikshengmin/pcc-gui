@@ -35,7 +35,7 @@ int64_t pcc_gui_native_image_rgba(const void *data,int64_t length,int64_t width,
 int64_t pcc_gui_native_image_path(const void *bytes,int64_t length,int64_t *out){
  if(![NSThread isMainThread]||!pcc_native_image_output(out)||length<0||(length&&!bytes))return 2;if(length>1048576)return 6;if(length&&memchr(bytes,0,(size_t)length))return 2;
  @autoreleasepool{@try{NSString *path=[[NSString alloc]initWithBytes:bytes length:(NSUInteger)length encoding:NSUTF8StringEncoding];if(!path)return 3;
- NSData *data=[NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:nil];if(!data)return pcc_gui_native_image_empty(out);if(data.length>67108864)return 6;
+ NSFileHandle *file=[NSFileHandle fileHandleForReadingAtPath:path];if(!file)return pcc_gui_native_image_empty(out);NSData *data=nil;@try{data=[file readDataOfLength:67108865];}@finally{[file closeFile];}if(!data)return 4;if(data.length>67108864)return 6;
  NSBitmapImageRep *bitmap=[[NSBitmapImageRep alloc]initWithData:data];if(!bitmap)return pcc_gui_native_image_empty(out);NSInteger width=bitmap.pixelsWide,height=bitmap.pixelsHigh;if(width<=0||height<=0)return pcc_gui_native_image_empty(out);if(width>4096||height>4096)return 6;
  NSImage *image=[[NSImage alloc]initWithSize:NSMakeSize(width,height)];[image addRepresentation:bitmap];if(!image)return 4;
  return pcc_native_image_publish(image,data,width,height,1,out);
