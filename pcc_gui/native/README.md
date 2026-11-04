@@ -109,3 +109,8 @@ cancellation and the separate source/production wiring boundary.
 an explicit async request. The latter completes through an existing document
 request lease. See the [consumer and authorization contract](../../examples/native_media/README.md)
 for terminal payloads, bundle prerequisites, cancellation and fixture scope.
+
+`pcc_gui_shell.h` supplies main-thread AppKit URL opening with terminal
+results on an existing document lease, and synchronous Finder selection.
+The [native shell consumer](../../examples/native_shell/README.md) describes
+the URL and path contracts.

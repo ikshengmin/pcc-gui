@@ -68,28 +68,10 @@ int64_t pcc_gui_media_microphone_status(int64_t *out) {
     }, out);
 }
 
-static int64_t pcc_media_claim(int64_t owner, int64_t *key) {
-    int64_t ready, head, metadata_len, body_len;
-    int64_t status = pcc_gui_protocol_request_peek(owner, &ready, &head, &metadata_len, &body_len);
-    if (status || ready) return status ? status : 5;
-    status = pcc_gui_protocol_submit(owner, NULL, 0, NULL, 0, key);
-    if (status) return status;
-    status = pcc_gui_protocol_request_claim(owner, *key);
-    if (status) {
-        // A native producer may have arrived before our submission. Preserve
-        // its FIFO position and consume only our still-unpublished request.
-        int64_t kind, code;
-        int64_t cancelled = pcc_gui_protocol_cancel(owner, *key);
-        if (cancelled != 0 && cancelled != 2) return 4;
-        if (!cancelled && pcc_gui_protocol_response_take(owner, *key, NULL, 0, NULL, 0,
-                                                         &kind, &code) != 0) return 4;
-    }
-    return status;
-}
 static int64_t pcc_media_ask_with(int64_t owner, PccMediaStarter starter, int64_t *out) {
     if (![NSThread isMainThread] || !pcc_media_output(out)) return 2;
     if (!starter) return 4;
-    int64_t request = 0, status = pcc_media_claim(owner, &request);
+    int64_t request = 0, status = pcc_protocol_begin_operation(owner, &request);
     if (status) return status;
     @autoreleasepool {
         @try {

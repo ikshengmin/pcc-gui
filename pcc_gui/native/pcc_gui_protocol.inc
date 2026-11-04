@@ -118,14 +118,15 @@ int64_t pcc_gui_protocol_open(int64_t *out) {
     *out = owner->key;
     return pcc_protocol_leave(0);
 }
-int64_t pcc_gui_protocol_submit(int64_t owner_key, const void *metadata, int64_t metadata_len,
-        const void *body, int64_t body_len, int64_t *out) {
+static int64_t pcc_protocol_create_request(int64_t owner_key, const void *metadata, int64_t metadata_len,
+        const void *body, int64_t body_len, int64_t *out, int claimed) {
     if (!pcc_protocol_outputs(&out, 1)) return 2;
     int64_t status = pcc_protocol_sizes(metadata, metadata_len, body, body_len);
     if (status) return status;
     if (!pcc_protocol_enter()) return 4;
     PccProtocolOwner *owner = pcc_protocol_owner(owner_key);
     if (!owner) return pcc_protocol_leave(2);
+    if (claimed && owner->queued) return pcc_protocol_leave(5);
     size_t slot = 0;
     while (slot < PCC_PROTOCOL_REQUESTS && owner->requests[slot]) slot++;
     if (slot == PCC_PROTOCOL_REQUESTS || pcc_protocol_next == INT64_MAX) return pcc_protocol_leave(6);
@@ -135,10 +136,21 @@ int64_t pcc_gui_protocol_submit(int64_t owner_key, const void *metadata, int64_t
     if (status) { free(request); return pcc_protocol_leave(status); }
     request->key = pcc_protocol_next++;
     owner->requests[slot] = request;
-    owner->fifo[owner->queued++] = request;
+    if (claimed) request->state = PCC_PROTOCOL_CLAIMED;
+    else owner->fifo[owner->queued++] = request;
     pcc_protocol_request_count++;
     *out = request->key;
     return pcc_protocol_leave(0);
+}
+int64_t pcc_gui_protocol_submit(int64_t owner_key, const void *metadata, int64_t metadata_len,
+        const void *body, int64_t body_len, int64_t *out) {
+    return pcc_protocol_create_request(owner_key, metadata, metadata_len, body, body_len, out, 0);
+}
+// UI-started native operations share the same quotas, keys and retirement.
+// Reserve the claim atomically without displacing earlier incoming requests.
+static int64_t pcc_protocol_begin_operation(int64_t owner, int64_t *out) {
+    if (![NSThread isMainThread]) return 2;
+    return pcc_protocol_create_request(owner, NULL, 0, NULL, 0, out, 1);
 }
 int64_t pcc_gui_protocol_request_peek(int64_t owner_key, int64_t *ready, int64_t *key,
         int64_t *metadata_len, int64_t *body_len) {

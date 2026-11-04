@@ -15,6 +15,7 @@
 #include "pcc_gui_tray.inc"
 #include "pcc_gui_protocol.inc"
 #include "pcc_gui_media.inc"
+#include "pcc_gui_shell.inc"
 
 static char pcc_render_last_error[512];
 static uint64_t pcc_last_click = 0;  /* 0 = none, else packed (y<<32)|x */
