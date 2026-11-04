@@ -16,6 +16,7 @@
 #include "pcc_gui_protocol.inc"
 #include "pcc_gui_media.inc"
 #include "pcc_gui_shell.inc"
+#include "pcc_gui_fullscreen.inc"
 
 static char pcc_render_last_error[512];
 static uint64_t pcc_last_click = 0;  /* 0 = none, else packed (y<<32)|x */
@@ -555,6 +556,7 @@ void *pcc_gui_metal_window_create(const char *title, int64_t width, int64_t heig
     [cv addSubview:mv];
     pcc_metal_layer = layer;
     pcc_metal_view = mv;
+    pcc_fs_track_window(win);
     return (__bridge_retained void *)win;
   }
 }
@@ -1063,6 +1065,7 @@ int64_t pcc_gui_metal_window_close(void *handle) {
     BOOL owns_render_cache = [pcc_metal_view window] == win;
     NSView *closing_render_view = pcc_metal_view;
     [win close];
+    pcc_fs_forget_window(win);
     if (pcc_lifecycle_window == win) {
       if ([win delegate] == pcc_lifecycle_delegate) [win setDelegate:nil];
       if ([NSApp delegate] == pcc_lifecycle_delegate) [NSApp setDelegate:nil];
