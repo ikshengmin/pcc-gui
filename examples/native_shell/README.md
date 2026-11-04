@@ -18,3 +18,18 @@ File reveal passes an absolute path to the system file viewer. Relative paths
 are resolved against the process's current directory. Selection failure has
 the source API's synchronous void result. Both APIs copy their input text
 during the call.
+
+The Darwin regression runs the public bridge with three NSWorkspace methods
+intercepted in its own executable. It checks the exact URL, activation flag,
+Finder path and empty viewer root. Native worker completions cover success,
+failure, duplicate replies, cancellation and document retirement. This test
+never opens Finder or a browser. The source behavior follows the selected
+[Electron Darwin platform implementation](https://github.com/electron/electron/blob/v44.7.0/shell/common/platform_util_mac.mm).
+
+For a generated-program comparison, build `tests/fixtures/native_shell.m`
+with `PCC_GUI_SHELL_TEST_LIBRARY`. The `pcc_gui_test_shell_open_external` and
+`pcc_gui_test_shell_show_item_in_folder` functions intercept the operations.
+The test-only observer copies the URL or resolved file path. The activation
+flag can be inspected separately. Call `pcc_gui_test_shell_finish` on a worker
+to supply the deferred workspace result. The normal protocol functions peek,
+take, cancel and retire these same requests.
