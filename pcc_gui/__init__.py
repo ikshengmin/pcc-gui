@@ -34,3 +34,4 @@ from .pcc_gui_tray import *
 
 from .pcc_gui_appearance import *
 from . import pcc_gui_protocol  # noqa: F401
+from . import pcc_gui_media  # noqa: F401

@@ -102,3 +102,10 @@ source callbacks. The UI owner claims each head, copies and consumes terminal
 replies, and retires the lease on document replacement. See the [consumer and
 contract](../../examples/native_protocol/README.md) for bounds, threading,
 cancellation and the separate source/production wiring boundary.
+
+### Microphone authorization
+
+`pcc_gui_media.h` adds the main-thread AVFoundation microphone status query and
+an explicit async request. The latter completes through an existing document
+request lease. See the [consumer and authorization contract](../../examples/native_media/README.md)
+for terminal payloads, bundle prerequisites, cancellation and fixture scope.
