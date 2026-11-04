@@ -93,3 +93,12 @@ message-box keys have independent stale-key protection. The integration fixture
 captures only its own window through the host-provided capture symbol because
 view-cache snapshots omit system-composited alert controls on the tested macOS.
 This capture path is test-only and does not establish general screen capture.
+
+### Document request ownership
+
+`pcc_gui_protocol.h` supplies a bounded native FIFO for a caller-owned document
+generation. Native producers copy opaque metadata/body bytes and never invoke
+source callbacks. The UI owner claims each head, copies and consumes terminal
+replies, and retires the lease on document replacement. See the [consumer and
+contract](../../examples/native_protocol/README.md) for bounds, threading,
+cancellation and the separate source/production wiring boundary.
