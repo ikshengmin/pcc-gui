@@ -517,7 +517,7 @@ int64_t pcc_gui_metal_lifecycle_probe(void *handle, const char *opened_path) {
   }
 }
 
-void *pcc_gui_metal_window_create(const char *title, int64_t width, int64_t height) {
+static void *pcc_create_metal_window(Class window_class, const char *title, int64_t width, int64_t height) {
   @autoreleasepool {
     NSApplication *app = [NSApplication sharedApplication];
     [app setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -525,7 +525,7 @@ void *pcc_gui_metal_window_create(const char *title, int64_t width, int64_t heig
     pcc_install_app_menu(appName);
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     NSRect frame = NSMakeRect(0, 0, (CGFloat)width, (CGFloat)height);
-    NSWindow *win = [[NSWindow alloc]
+    NSWindow *win = [[window_class alloc]
         initWithContentRect:frame
         styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                  NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)
@@ -560,6 +560,16 @@ void *pcc_gui_metal_window_create(const char *title, int64_t width, int64_t heig
     return (__bridge_retained void *)win;
   }
 }
+
+void *pcc_gui_metal_window_create(const char *title, int64_t width, int64_t height) {
+  return pcc_create_metal_window(NSWindow.class, title, width, height);
+}
+
+#ifdef PCC_GUI_FULLSCREEN_FIXTURE
+void *pcc_gui_test_metal_fullscreen_window(Class window_class) {
+  return pcc_create_metal_window(window_class, "PCC fullscreen fixture", 128, 96);
+}
+#endif
 
 int64_t pcc_gui_metal_window_render(void *handle, const void *rects,
                                     const void *colors, int64_t count,

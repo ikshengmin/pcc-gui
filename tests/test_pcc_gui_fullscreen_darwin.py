@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parents[1]
 def test_fullscreen_window_lifetime_and_notifications(tmp_path: Path) -> None:
     executable = tmp_path / "fullscreen"
     built = subprocess.run(
-        ["xcrun", "--sdk", "macosx", "clang", "-fobjc-arc", "-fblocks", "-pthread",
+        ["xcrun", "--sdk", "macosx", "clang", "-fobjc-arc", "-fblocks", "-pthread", "-DPCC_GUI_FULLSCREEN_FIXTURE",
          "-framework", "Foundation", "-framework", "AppKit", "-framework", "Metal",
          "-framework", "QuartzCore", str(REPO / "pcc_gui/native/pcc_gui_metal_render_bridge.m"),
          str(REPO / "tests/fixtures/native_fullscreen.m"), "-o", str(executable)],

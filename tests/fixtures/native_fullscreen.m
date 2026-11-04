@@ -1,7 +1,6 @@
 // Native window leases use real AppKit windows. The per-test subclass intercepts
 // fullscreen toggles before they can display a window or enter a system Space.
 #import <AppKit/AppKit.h>
-#import <objc/runtime.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -9,16 +8,15 @@
 
 void *pcc_gui_metal_window_create(const char *, int64_t, int64_t);
 int64_t pcc_gui_metal_window_close(void *);
+void *pcc_gui_test_metal_fullscreen_window(Class);
 
 @interface PCCFullscreenFixture : NSObject
-@property(nonatomic) Class original;
 @property(nonatomic) BOOL full, visible;
 @property(nonatomic) int64_t key, toggles, mode, nestedStatus;
 @property(nonatomic, weak) NSWindow *window;
 @end
 @implementation PCCFullscreenFixture
 @end
-static char fixture_key;
 static NSMutableDictionary<NSValue *, PCCFullscreenFixture *> *fixtures;
 
 static PCCFullscreenFixture *fixture(void *handle) {
@@ -26,56 +24,37 @@ static PCCFullscreenFixture *fixture(void *handle) {
     return fixtures[[NSValue valueWithPointer:handle]];
 }
 
-static NSWindowStyleMask fixture_mask(NSWindow *window, SEL cmd) {
-    PCCFullscreenFixture *state = objc_getAssociatedObject(window, &fixture_key);
-    IMP underlying = class_getMethodImplementation(state.original, cmd);
-    NSWindowStyleMask flags = ((NSWindowStyleMask (*)(id,SEL))underlying)(window,cmd);
-    return (flags & ~NSWindowStyleMaskFullScreen) | (state.full ? NSWindowStyleMaskFullScreen : 0);
+@interface PCCControlledFullscreenWindow : NSWindow
+@property(nonatomic,strong) PCCFullscreenFixture *fixtureState;
+@end
+@implementation PCCControlledFullscreenWindow
+- (NSWindowStyleMask)styleMask {
+    NSWindowStyleMask native = [super styleMask];
+    if (!_fixtureState) return native;
+    return (native & ~NSWindowStyleMaskFullScreen) | (_fixtureState.full ? NSWindowStyleMaskFullScreen : 0);
 }
-static BOOL fixture_visible(NSWindow *window, SEL cmd) {
-    PCCFullscreenFixture *state = objc_getAssociatedObject(window, &fixture_key);
-    return state.visible;
-}
-static void fixture_toggle(NSWindow *window, SEL cmd, id sender) {
-    PCCFullscreenFixture *state = objc_getAssociatedObject(window, &fixture_key);
+- (BOOL)isVisible { return _fixtureState ? _fixtureState.visible : [super isVisible]; }
+- (void)toggleFullScreen:(id)sender {
+    PCCFullscreenFixture *state = _fixtureState;
+    if (!state) [NSException raise:@"TestFullscreen" format:@"uncontrolled toggle"];
     state.toggles++;
     if (state.mode == 1) [NSException raise:@"TestFullscreen" format:@"injected toggle failure"];
     if (state.mode == 2) state.nestedStatus = pcc_gui_fullscreen_set(state.key,state.full);
     if (state.mode == 3) state.nestedStatus = pcc_gui_fullscreen_release(state.key);
     [NSNotificationCenter.defaultCenter postNotificationName:
-        (state.full ? NSWindowWillExitFullScreenNotification : NSWindowWillEnterFullScreenNotification) object:window];
+        (state.full ? NSWindowWillExitFullScreenNotification : NSWindowWillEnterFullScreenNotification) object:self];
 }
-
-static BOOL install(Class subclass, Class base, SEL selector, IMP implementation) {
-    Method m = class_getInstanceMethod(base,selector);
-    return m && class_addMethod(subclass,selector,implementation,method_getTypeEncoding(m));
-}
+@end
 
 int64_t pcc_gui_test_fullscreen_window(int64_t full, int64_t visible, void **out) {
     if (![NSThread isMainThread] || !out || (full & ~1) || (visible & ~1)) return 2;
-    void *handle = pcc_gui_metal_window_create("PCC fullscreen fixture",128,96);
+    void *handle = pcc_gui_test_metal_fullscreen_window(PCCControlledFullscreenWindow.class);
     if (!handle) return 4;
-    NSWindow *window = (__bridge NSWindow *)handle;
-    Class base=object_getClass(window);
-    static Class subclass;
-    if (!subclass) {
-        subclass = objc_allocateClassPair(base,"PCCFullscreenInterceptWindow",0);
-        if (!subclass || !install(subclass,base,@selector(styleMask),(IMP)fixture_mask) ||
-            !install(subclass,base,@selector(isVisible),(IMP)fixture_visible) ||
-            !install(subclass,base,@selector(toggleFullScreen:),(IMP)fixture_toggle)) {
-            if (subclass) objc_disposeClassPair(subclass);
-            subclass = Nil;
-            pcc_gui_metal_window_close(handle);
-            return 4;
-        }
-        objc_registerClassPair(subclass);
-    }
-    if (class_getSuperclass(subclass)!=base) { pcc_gui_metal_window_close(handle); return 4; }
+    PCCControlledFullscreenWindow *window = (__bridge PCCControlledFullscreenWindow *)handle;
     window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
     PCCFullscreenFixture *state=[PCCFullscreenFixture new];
-    state.window=window; state.original=base; state.full=full; state.visible=visible; state.nestedStatus=-1;
-    objc_setAssociatedObject(window,&fixture_key,state,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    object_setClass(window,subclass);
+    state.window=window; state.full=full; state.visible=visible; state.nestedStatus=-1;
+    window.fixtureState=state;
     if (!fixtures) fixtures=[NSMutableDictionary dictionary];
     fixtures[[NSValue valueWithPointer:handle]]=state;
     *out=handle;
@@ -102,11 +81,10 @@ int64_t pcc_gui_test_fullscreen_stats(void *handle,int64_t *count,int64_t *neste
 int64_t pcc_gui_test_fullscreen_close(void *handle) {
     PCCFullscreenFixture *state=fixture(handle);
     if (!state) return 2;
-    NSWindow *window=state.window;
+    PCCControlledFullscreenWindow *window=(PCCControlledFullscreenWindow *)state.window;
     [fixtures removeObjectForKey:[NSValue valueWithPointer:handle]];
     if (!fixtures.count) fixtures=nil;
-    object_setClass(window,state.original);
-    objc_setAssociatedObject(window,&fixture_key,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    window.fixtureState=nil;
     return pcc_gui_metal_window_close(handle);
 }
 
