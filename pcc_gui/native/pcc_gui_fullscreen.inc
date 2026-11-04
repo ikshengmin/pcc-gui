@@ -8,6 +8,7 @@
 @property(nonatomic) BOOL active, closed, setting, lastFull;
 @property(nonatomic) NSInteger pending;  // -1 idle, 0 leaving, 1 entering
 @property(nonatomic) int64_t failure;
+@property(nonatomic, strong) NSObject *scheduled;
 @property(nonatomic, strong) NSMutableArray *tokens;
 @property(nonatomic, strong) NSMutableArray<NSNumber *> *events;
 @end
@@ -32,11 +33,16 @@ static void pcc_fs_publish(PCCFullscreenLease *lease, int64_t kind) {
 }
 
 static void pcc_fs_forget_window(NSWindow *window) {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ pcc_fs_forget_window(window); });
+        return;
+    }
     if (![pcc_fs_windows containsObject:window]) return;
     [pcc_fs_windows removeObject:window];
     for (PCCFullscreenLease *lease in pcc_fs_leases.objectEnumerator) {
         if (lease.window != window) continue;
         lease.closed = YES;
+        lease.scheduled = nil;
         lease.window = nil;
         lease.pending = -1;
         pcc_fs_publish(lease, 3);
@@ -56,9 +62,7 @@ static void pcc_fs_track_window(NSWindow *window) {
         pcc_fs_close_token = [NSNotificationCenter.defaultCenter
             addObserverForName:NSWindowWillCloseNotification object:nil queue:nil
             usingBlock:^(NSNotification *note) {
-                NSWindow *closing = note.object;
-                if ([NSThread isMainThread]) pcc_fs_forget_window(closing);
-                else dispatch_async(dispatch_get_main_queue(), ^{ pcc_fs_forget_window(closing); });
+                pcc_fs_forget_window(note.object);
             }];
     }
     [pcc_fs_windows addObject:window];
@@ -66,8 +70,9 @@ static void pcc_fs_track_window(NSWindow *window) {
 
 static void pcc_fs_notification(PCCFullscreenLease *lease, BOOL did, BOOL full) {
     if (!lease.active || lease.closed) return;
-    if (!did) { lease.pending = full; return; }
+    if (!did) { lease.scheduled = nil; lease.pending = full; return; }
     if (lease.pending != -1 && lease.pending != full) return;
+    lease.scheduled = nil;
     lease.pending = -1;
     if (lease.lastFull == full) return;
     lease.lastFull = full;
@@ -111,7 +116,7 @@ int64_t pcc_gui_fullscreen_acquire(void *handle, int64_t *out) {
     pcc_fs_leases[@(lease.key)] = lease;
     @try {
         lease.lastFull = (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
-        if (lease.closed) { [pcc_fs_leases removeObjectForKey:@(lease.key)]; return 2; }
+        if (!lease.active || lease.closed) { pcc_gui_fullscreen_release(lease.key); return 2; }
         pcc_fs_observe(lease, NSWindowWillEnterFullScreenNotification, NO, YES);
         pcc_fs_observe(lease, NSWindowWillExitFullScreenNotification, NO, NO);
         pcc_fs_observe(lease, NSWindowDidEnterFullScreenNotification, YES, YES);
@@ -144,7 +149,8 @@ static int64_t pcc_fs_toggle(PCCFullscreenLease *lease, BOOL full) {
     @try {
         BOOL current = (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
         BOOL capable = (window.collectionBehavior & NSWindowCollectionBehaviorFullScreenPrimary) != 0;
-        if (!lease.active || lease.closed || lease.pending != full) return 2;
+        if (!lease.active || lease.closed) return 2;
+        if (lease.pending != full) return 5;
         if (current == full || !capable) { lease.pending = -1; return 0; }
         [window toggleFullScreen:nil];
     } @catch (NSException *exception) { lease.pending = -1; return 4; }
@@ -164,16 +170,21 @@ int64_t pcc_gui_fullscreen_set(int64_t key, int64_t full) {
         BOOL current = (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
         BOOL capable = (window.collectionBehavior & NSWindowCollectionBehaviorFullScreenPrimary) != 0;
         if (!lease.active || lease.closed) return 2;
+        if (lease.pending != -1) return lease.pending == full ? 0 : 5;
         if (current == full || !capable) return 0;
         BOOL visible = window.visible;
         if (!lease.active || lease.closed) return 2;
+        if (lease.pending != -1) return lease.pending == full ? 0 : 5;
         lease.pending = full;
         if (!visible) return pcc_fs_toggle(lease, full);
         // Electron defers a visible window's toggle beyond the current AppKit turn.
+        NSObject *ticket = [NSObject new];
+        lease.scheduled = ticket;
         __weak PCCFullscreenLease *weakLease = lease;
         dispatch_async(dispatch_get_main_queue(), ^{
             PCCFullscreenLease *live = weakLease;
-            if (!live.active || live.closed || live.pending != full) return;
+            if (!live.active || live.closed || live.scheduled != ticket) return;
+            live.scheduled = nil;
             int64_t status = pcc_fs_toggle(live, full);
             if (live.active && !live.closed && status != 0) live.failure = status;
         });
@@ -198,6 +209,7 @@ int64_t pcc_gui_fullscreen_release(int64_t key) {
     PCCFullscreenLease *lease = pcc_fs_leases[@(key)];
     if (!lease) return 2;
     lease.active = NO;
+    lease.scheduled = nil;
     [pcc_fs_leases removeObjectForKey:@(key)];
     pcc_fs_remove_tokens(lease);
     if (pcc_fs_leases.count == 0) pcc_fs_leases = nil;
