@@ -114,3 +114,10 @@ for terminal payloads, bundle prerequisites, cancellation and fixture scope.
 results on an existing document lease, and synchronous Finder selection.
 The [native shell consumer](../../examples/native_shell/README.md) describes
 the URL and path contracts.
+
+### Fullscreen transitions
+
+`pcc_gui_fullscreen.h` exposes owner-polled fullscreen and close notifications
+for existing Metal window handles. It observes AppKit state without replacing
+window delegates. The finite native contract and controlled hidden-window
+qualification are in `examples/native_fullscreen/README.md`.
