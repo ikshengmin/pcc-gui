@@ -1104,3 +1104,5 @@ int64_t pcc_gui_metal_window_close(void *handle) {
     return 0;
   }
 }
+
+#include "pcc_gui_document.inc"

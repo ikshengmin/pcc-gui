@@ -121,3 +121,16 @@ the URL and path contracts.
 for existing Metal window handles. It observes AppKit state without replacing
 window delegates. The finite native contract and controlled hidden-window
 qualification are in `examples/native_fullscreen/README.md`.
+
+`pcc_gui_document.h` adds an immutable translated-document presentation adapter.
+It accepts `t2-browser-presentation-v1` data: connected DOM rows, source-selected
+CSS declarations with specificity/importance, and bound RGBA image bytes. It
+reuses the canonical native window owner and adds a read-only principal-box view.
+The finite layout includes block/inline text, one-column grid, flex rows/columns,
+box edges, colors, inherited variables, rounded borders and static images.
+Unknown source services are not emulated. This is a preview adapter, not full CSS,
+DOM event integration or native PCC1 qualification. A failed payload keeps the
+previous view. All calls require the current main-thread window owner; close
+releases the view and data. The focused native fixture is
+`tests/fixtures/document_presentation.m`. The TAG consumer launches only its
+compiled renderer and presents that renderer's actual snapshot.
