@@ -87,7 +87,8 @@ gtimeout 60s env -u LC_ALL uv run pytest tests/test_pcc_gui_events.py::test_even
 | Layout/style/render tree | `pcc_gui/pcc_gui_kit.py`, `pcc_gui_layout.py`, `pcc_gui_style.py`, `pcc_gui_cg.py`; matching tests |
 | Events/commands/lifecycle | `pcc_gui/pcc_gui_events.py`, `pcc_gui_commands.py`, `pcc_gui_app_lifecycle.py`; matching tests |
 | Native window/Metal | `pcc_gui/native/`, `pcc_gui/pcc_gui_window.py`, `tests/test_pcc_gui_*_darwin.py` |
-| End-to-end examples | `examples/closure_probe/`, `examples/mac_diff_app/`, `examples/harness/` |
+| End-to-end examples | `examples/closure_probe/`, `examples/mac_diff_app/` |
+| Harness product confirmation | Standalone adjacent `../harness/`; application changes belong there, GUI/compiler fixes stay in their owning repositories. |
 
 Keep README concise, with runnable examples and artifact-scoped results. Keep
 experiment history out of this startup guide; consult design/reference documents

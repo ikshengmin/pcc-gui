@@ -15,14 +15,14 @@ from gui_compiler import compiler_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT = ROOT / "examples" / "harness"
+PROJECT = Path(os.environ.get("PCC_HARNESS_ROOT", ROOT.parent / "harness")).resolve()
 
 
 def _load_model():
     sys.path.insert(0, str(PROJECT))
     try:
         spec = importlib.util.spec_from_file_location(
-            "pcc_harness_gui_model", PROJECT / "gui_model.py"
+            "pcc_harness_gui_model", PROJECT / "harness" / "gui_model.py"
         )
         assert spec is not None
         assert spec.loader is not None
@@ -59,22 +59,22 @@ def test_gui_state_projects_the_logged_agent_turn() -> None:
 
 
 def test_gui_source_uses_pcc_declarative_and_command_owners() -> None:
-    source = (PROJECT / "gui_app.py").read_text(encoding="utf-8")
-    bridge = (PROJECT / "gui_bridge.py").read_text(encoding="utf-8")
-    launcher = (PROJECT / "harness").read_text(encoding="utf-8")
+    source = (PROJECT / "harness" / "gui_app.py").read_text(encoding="utf-8")
+    bridge = (PROJECT / "harness" / "gui_bridge.py").read_text(encoding="utf-8")
+    launcher = (PROJECT / "bin" / "harness").read_text(encoding="utf-8")
 
     assert '"pcc_kit_create"' in source
     assert '"pcc_kit_render"' in source
     assert '"pcc_gui_commands_register"' in source
     assert "pcc_gui_metal_window_create" in bridge
-    assert 'for SOURCE in "$PROJECT_DIR"/*.py' in launcher
+    assert 'for SOURCE in "$PROJECT_DIR/harness"/*.py' in launcher
     assert '[ "$SOURCE" -nt "$OUTPUT" ]' in launcher
     assert "WebView" not in source + bridge
     assert "Electron" not in source + bridge
 
 
 def test_gui_static_text_lengths_match_utf8_payloads() -> None:
-    tree = ast.parse((PROJECT / "gui_app.py").read_text(encoding="utf-8"))
+    tree = ast.parse((PROJECT / "harness" / "gui_app.py").read_text(encoding="utf-8"))
     checked = 0
     projected = 0
     for node in ast.walk(tree):
@@ -162,7 +162,7 @@ def test_current_pcc1_native_harness_headless(
     artifact = tmp_path / "harness-core"
     built = subprocess.run(
         [str(compiler_path()), "--backend", "self", "--python-libpython=off",
-         "--ir-scaffold=on", str(PROJECT / "app.py"), "-o", str(artifact)],
+         "--ir-scaffold=on", str(PROJECT / "harness" / "__main__.py"), "-o", str(artifact)],
         cwd=ROOT, env=env, text=True, capture_output=True, timeout=300,
     )
     assert built.returncode == 0, built.stdout + built.stderr

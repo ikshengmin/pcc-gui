@@ -20,7 +20,7 @@ dev = ["pytest==9.0.3", "pytest-xdist>=3.8.0"]
 python-cc = { path = "../pcc", editable = true }
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "examples/harness/tests"]
+testpaths = ["tests"]
 addopts = "-x -m 'not integration'"
 pythonpath = ["../pcc", "../pcc/tests/python"]
 markers = [

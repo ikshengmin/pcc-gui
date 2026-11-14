@@ -1,0 +1,389 @@
+{
+ "schema": "standalone-harness-migration-inventory-v1",
+ "source_head": "16c6ecfca3e576b5bef302071325c0f8dd8bc549",
+ "destination_root": "/Users/jiamo/my/harness",
+ "deleted_source_files": 46,
+ "destination_files_verified": 46,
+ "identical_files": 20,
+ "files": [
+  {
+   "old_path": "examples/harness/AGENTS.md",
+   "destination": "/Users/jiamo/my/harness/AGENTS.md",
+   "previous_sha256": "63e0617a0055d98bf0c69fca8fa1f8c2ae2344dd581043786bd301782658d3b3",
+   "destination_sha256": "8902d95631ca6aff601b34d3f1e3d55939f7c0de2785b9a9cf58f4e25d91862c",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/ARCHITECTURE.md",
+   "destination": "/Users/jiamo/my/harness/ARCHITECTURE.md",
+   "previous_sha256": "bd7fb9d4b148adc88322ac0fd0af29b15a36878267d4fdc627fff6e4c87d1897",
+   "destination_sha256": "bd7fb9d4b148adc88322ac0fd0af29b15a36878267d4fdc627fff6e4c87d1897",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/README.md",
+   "destination": "/Users/jiamo/my/harness/README.md",
+   "previous_sha256": "a43a742fe0f6491bf2fa1e46dcf762de5d163bdca31ed4742989b27d39356113",
+   "destination_sha256": "f2cc5eb49764390eae08e5cd4fca6bcb83cfb81dc7bd59bbb59f810b8d80c496",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/TASKS.md",
+   "destination": "/Users/jiamo/my/harness/TASKS.md",
+   "previous_sha256": "81da4187ad2386e6425ccaf288f2ae4cf790e0c669f8098e34026be4e5aa78e7",
+   "destination_sha256": "81da4187ad2386e6425ccaf288f2ae4cf790e0c669f8098e34026be4e5aa78e7",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/agent_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/agent_runtime.py",
+   "previous_sha256": "f583ac96d2984bce6bef527bf3e05558788b7ee6afcdea7d9d3247ef58c0ef54",
+   "destination_sha256": "1656218c9984798b388c5a3e7e65eb8e98f3dc8ec90e695e2e585106bf3b2e67",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/app.py",
+   "destination": "/Users/jiamo/my/harness/harness/app.py",
+   "previous_sha256": "40def429aaa74cd4553f70ee6780b4dc95d619a020de897867f2bd0444b90f8e",
+   "destination_sha256": "3fd5c43146717ace7538f8d59ed88da327476576f2c7105e808fef6e3fb1f952",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/bootstrap-pcc1.sh",
+   "destination": "/Users/jiamo/my/harness/bootstrap-pcc1.sh",
+   "previous_sha256": "355b546a6043538c3945b5502acd4346e71a588ac2f9521c3ec9079dd47211cb",
+   "destination_sha256": "49eb12a842a73da64a8aa4c200f9fa7d3a1ac914bde9f83fd7e4b1b31bbd8b97",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/build.sh",
+   "destination": "/Users/jiamo/my/harness/build.sh",
+   "previous_sha256": "ae456489dc71fb5c79361da62c26ec36deb459deb4b0637b9e06e27b527805fc",
+   "destination_sha256": "496580b4475a840cebf929f7ff27b48e46ba8ef4242789803df57ac3fd091f32",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/credentials_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/credentials_runtime.py",
+   "previous_sha256": "90077948154c745028d4d11a8afc258b54e5b58a1608fdd54c92e8e57e484a8f",
+   "destination_sha256": "90077948154c745028d4d11a8afc258b54e5b58a1608fdd54c92e8e57e484a8f",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/gui/upstream-baseline.json",
+   "destination": "/Users/jiamo/my/harness/gui/upstream-baseline.json",
+   "previous_sha256": "bb977449a1bf576745ecdc4ee4890ebac5e4b9424a65bb7faeea1d87124fa2c0",
+   "destination_sha256": "bb977449a1bf576745ecdc4ee4890ebac5e4b9424a65bb7faeea1d87124fa2c0",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/gui_app.py",
+   "destination": "/Users/jiamo/my/harness/harness/gui_app.py",
+   "previous_sha256": "af534fa447dc5da8997cd321472b6a9e420c336d70bf5ac3a2ac651fd56de85c",
+   "destination_sha256": "00bb4a969c0f7072f0aaf3331a3675a8bbfde8be44a4cbe3af3e566ccc2cf42a",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/gui_bridge.py",
+   "destination": "/Users/jiamo/my/harness/harness/gui_bridge.py",
+   "previous_sha256": "12ebbff0e57140fe38374aa20388ff3dcbafc0f51d89761774faa49252406808",
+   "destination_sha256": "12ebbff0e57140fe38374aa20388ff3dcbafc0f51d89761774faa49252406808",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/gui_model.py",
+   "destination": "/Users/jiamo/my/harness/harness/gui_model.py",
+   "previous_sha256": "51f780d7b107d0add484c0c808f65434d2ac0b5302cd02d467734ed31925d32b",
+   "destination_sha256": "ae57afc83e9c83a178fbbcb49e9b785214dcaf1b7468f3a98e6b6e82ad64999e",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/harness",
+   "destination": "/Users/jiamo/my/harness/bin/harness",
+   "previous_sha256": "f77ce1875844e9559cdee331e56137fe1db080839f5cf41472ce109685fe1916",
+   "destination_sha256": "bdb17e872b9ad35cf450e9b1b97651f7cf40c06e095cd25a88f406d1d8d75186",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/harness_core.py",
+   "destination": "/Users/jiamo/my/harness/harness/harness_core.py",
+   "previous_sha256": "04e653349a3cf75eb08bbde58111734de88585ec12b016c7dd4bfc052c7110d9",
+   "destination_sha256": "110f524eacffebfdd2dd0f665785955af8eff99bc2895f2d2de5d8f4011c90af",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/harness_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/harness_runtime.py",
+   "previous_sha256": "cd2382b04a0f850bb10bb3ba6d3b344fdd379bc0510c6f4207af6d8e0216e762",
+   "destination_sha256": "7a609c3249cf2848516bb63ab50c9780784af5248689aa0b76b1552e14490d83",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/identity_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/identity_runtime.py",
+   "previous_sha256": "16b8bbc543175cc6964d14ed7bd0ec737929ee5b2d5e7fb1f33244fdd4a6b12e",
+   "destination_sha256": "16b8bbc543175cc6964d14ed7bd0ec737929ee5b2d5e7fb1f33244fdd4a6b12e",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/loader_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/loader_runtime.py",
+   "previous_sha256": "d4d32343356dfb10788d92e0711d00bdda7932f1a53d90bcf3351f8ac4246e7b",
+   "destination_sha256": "d4d32343356dfb10788d92e0711d00bdda7932f1a53d90bcf3351f8ac4246e7b",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/migration/ENTRY_TEMPLATE.md",
+   "destination": "/Users/jiamo/my/harness/migration/ENTRY_TEMPLATE.md",
+   "previous_sha256": "c6e9845b90b144afcf0888f8ba8bd6347343ae74160b2752364b79e6ef0b14e5",
+   "destination_sha256": "c6e9845b90b144afcf0888f8ba8bd6347343ae74160b2752364b79e6ef0b14e5",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/migration/README.md",
+   "destination": "/Users/jiamo/my/harness/migration/README.md",
+   "previous_sha256": "5dc5e87997f4a5ca5f5d9ca7f38cdefc79013617f2c6f6e412510895ef71f976",
+   "destination_sha256": "33d9309be31e48fd7c58964c73d2ef41acfee6011fb82438ff7f2d075d6479b1",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/migration/commits/0001-assembled-runtime-current-pcc1.md",
+   "destination": "/Users/jiamo/my/harness/migration/commits/0001-assembled-runtime-current-pcc1.md",
+   "previous_sha256": "245e3a4c19b6fd1cedbe10abdd6137c5ae2da5f10343abff2f3d7381ac009c18",
+   "destination_sha256": "245e3a4c19b6fd1cedbe10abdd6137c5ae2da5f10343abff2f3d7381ac009c18",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/migration/commits/0002-shared-compiler-framework-bridge.md",
+   "destination": "/Users/jiamo/my/harness/migration/commits/0002-shared-compiler-framework-bridge.md",
+   "previous_sha256": "6aa7d9db1d140434ae311080f445f6031ddec50fe87b92a35bb72d83552d007d",
+   "destination_sha256": "6aa7d9db1d140434ae311080f445f6031ddec50fe87b92a35bb72d83552d007d",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/migration/commits/0003-session-observers-and-pump-abi.md",
+   "destination": "/Users/jiamo/my/harness/migration/commits/0003-session-observers-and-pump-abi.md",
+   "previous_sha256": "97f7549b1bae7e8d50f1f488bfae4beb3693d74d1fc4ad496cdae76e91397ca3",
+   "destination_sha256": "97f7549b1bae7e8d50f1f488bfae4beb3693d74d1fc4ad496cdae76e91397ca3",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/migration/commits/0004-retain-disabled-group-realms.md",
+   "destination": "/Users/jiamo/my/harness/migration/commits/0004-retain-disabled-group-realms.md",
+   "previous_sha256": "eae932be22865a0c2bd9db46b9c7cf3cc544f926bde4df53a1b2c3f0e18e8419",
+   "destination_sha256": "eae932be22865a0c2bd9db46b9c7cf3cc544f926bde4df53a1b2c3f0e18e8419",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/migration/upstream.json",
+   "destination": "/Users/jiamo/my/harness/migration/upstream.json",
+   "previous_sha256": "f568741a61122762adf0a2423bfd19d97c8649de568057ebe07ddafd08506ae9",
+   "destination_sha256": "f568741a61122762adf0a2423bfd19d97c8649de568057ebe07ddafd08506ae9",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/migration/validate_ledger.py",
+   "destination": "/Users/jiamo/my/harness/migration/validate_ledger.py",
+   "previous_sha256": "ce3aefd8b2c49113d1f5bc3e64094bcc98508d7ea4d31a118fa64ed1d7b02976",
+   "destination_sha256": "ce3aefd8b2c49113d1f5bc3e64094bcc98508d7ea4d31a118fa64ed1d7b02976",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/model_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/model_runtime.py",
+   "previous_sha256": "808b8d5b00230da3b298dfbddb31d1ca8e8071677fb76d4cbf35b9f876a80f99",
+   "destination_sha256": "808b8d5b00230da3b298dfbddb31d1ca8e8071677fb76d4cbf35b9f876a80f99",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/plugin_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/plugin_runtime.py",
+   "previous_sha256": "476d1d8efa3a5fe992ab7c681464ac295e001516ae8a26102a4c0a496a84d467",
+   "destination_sha256": "476d1d8efa3a5fe992ab7c681464ac295e001516ae8a26102a4c0a496a84d467",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/session_persistence.py",
+   "destination": "/Users/jiamo/my/harness/harness/session_persistence.py",
+   "previous_sha256": "0ccbbe40c747772863c0fa78f072f53c3514c83093c52ec12eafa09f8efaecc3",
+   "destination_sha256": "d3888cb4c2c51fe5172ecb6a5dbb58152a8b7a15925ec140305c01ec9c2863d4",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/session_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/session_runtime.py",
+   "previous_sha256": "8d0abbf28f3f574479bd66af7b1700c98fc104cb02b01b68dbe4e4f5c242d3a0",
+   "destination_sha256": "8d0abbf28f3f574479bd66af7b1700c98fc104cb02b01b68dbe4e4f5c242d3a0",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/settings_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/settings_runtime.py",
+   "previous_sha256": "58bb960fcc86df4df83c2a754658ad2cbbca2f9a64cb329b03b8be968f5ed013",
+   "destination_sha256": "58bb960fcc86df4df83c2a754658ad2cbbca2f9a64cb329b03b8be968f5ed013",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/source_provenance.py",
+   "destination": "/Users/jiamo/my/harness/harness/source_provenance.py",
+   "previous_sha256": "75893c8f93294e8097fb9053ca9ff9f6a5e4a15c50f7d1d033fb2a001eb573d5",
+   "destination_sha256": "75893c8f93294e8097fb9053ca9ff9f6a5e4a15c50f7d1d033fb2a001eb573d5",
+   "identical_bytes": true
+  },
+  {
+   "old_path": "examples/harness/tests/conftest.py",
+   "destination": "/Users/jiamo/my/harness/tests/conftest.py",
+   "previous_sha256": "6b3d84ed35b13afb7a202c089e0e707b58b04d06979b7d27f8c4b4e983963fc8",
+   "destination_sha256": "44683aa8927fdf7f8f7f6c9c0684b008d407661be4ac2662399cd02ce60f07c1",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_agent_runtime.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_agent_runtime.py",
+   "previous_sha256": "70926210ea98388e5f0a8009774593f96d324ee90451a7cb0dfeca45fa626e2f",
+   "destination_sha256": "45bc8d70da27afd3ba9ec33071c85b9c90a16046783db01536889c8038d69124",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_gui_state_lifecycle.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_gui_state_lifecycle.py",
+   "previous_sha256": "b3da8616a196e44bc08368c27743217573026dc9b8ceb0f180b88b627634a2df",
+   "destination_sha256": "729c7dfcd6ee24935f865573426190a681572318a73c37815cbb1c18ae527e88",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_harness_runtime.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_harness_runtime.py",
+   "previous_sha256": "49204fbcd90b7f1a8c52cd06c9642e812b814a91dbe7bbcdd9540dce3b44d61f",
+   "destination_sha256": "85cd190b6220c2f8cc4724c583bbdcd60c356db32b00ebe989c5e6158cc93f4d",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_loader_group_lifecycle.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_loader_group_lifecycle.py",
+   "previous_sha256": "a9b87ae6818abdf73c675960afa1ffa569846c56cf1d1882c2516ade67bacfae",
+   "destination_sha256": "e187d11546b4f8bf5e95235c6fe7ac33360f50797ee344f9be10527658555a5c",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_loader_runtime.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_loader_runtime.py",
+   "previous_sha256": "dd7e3af7e8f17120833eac5ceb120478b2660a6611bbb86ff04068af3734a160",
+   "destination_sha256": "f76567d81e616e7899a0157c48357f4292feb1f9aa50336c6326264a87bcd346",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_model_runtime.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_model_runtime.py",
+   "previous_sha256": "8d22c99afe31aec54ad973b0fc137bfd2c4437b98ad934cbb277d4b17922b28c",
+   "destination_sha256": "e1554b28d50e7920c0524bbee5a475e7e8935ab7b65e248beb9694fb19f0d2ce",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_plugin_runtime.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_plugin_runtime.py",
+   "previous_sha256": "c4a3c38c68893ecb1b1add39758a790bc592a4dc866d8247d81e989e47fa81b9",
+   "destination_sha256": "0989c38e152acd757b57b07449d2e5f40497aa850f82dc6356724a17e0c909c6",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_session_persistence.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_session_persistence.py",
+   "previous_sha256": "0f52ebc1d2fb711c7c5f9845b17dd942d60cd2b64c56e5c18af624fd18ca6fcd",
+   "destination_sha256": "55ad5a2ef4b10f53421ade88b74e471832de74d33265a88fae2c871d192aa1b7",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_session_runtime.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_session_runtime.py",
+   "previous_sha256": "29e9698f0447aa90d063bcfafeafba995ce07a8d29b7991108229c4555db7229",
+   "destination_sha256": "cf0a7a1574b81a86daecdd1b1e86f3bb7c0421dcfd2905fa19914456d1337e8b",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_source_provenance.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_source_provenance.py",
+   "previous_sha256": "473dae33140b6ff5f1c8a13de81da05faffe3240914bdd4f933340bb65c36302",
+   "destination_sha256": "27e859c244f00b58a73d578748cc7ad96bc3b7c5439fa13757ed5c73e7c3bbd1",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tests/test_tool_runtime.py",
+   "destination": "/Users/jiamo/my/harness/tests/test_tool_runtime.py",
+   "previous_sha256": "d69ffb89dc0b5a91d5638d52938df451d64fbe824b76322662cee1c9d4ac10ea",
+   "destination_sha256": "0f96a1758ae693286f1a0137ce32be1d34e92e3b5a125a62630dafad9d509ff9",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/todo_plan_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/todo_plan_runtime.py",
+   "previous_sha256": "d4b5b4557f0e3671f046924ae0cd9da3c3dedede58f26092981b6e6db329d148",
+   "destination_sha256": "b86083f833dcdac17537b93f98f5921a2bb8ce819292984de9ac1bdf9e397b32",
+   "identical_bytes": false
+  },
+  {
+   "old_path": "examples/harness/tool_runtime.py",
+   "destination": "/Users/jiamo/my/harness/harness/tool_runtime.py",
+   "previous_sha256": "84e4113ae8cf3e737c7941850262bd07de056099982bd6e6645ba4e631da88e6",
+   "destination_sha256": "84e4113ae8cf3e737c7941850262bd07de056099982bd6e6645ba4e631da88e6",
+   "identical_bytes": true
+  }
+ ],
+ "existing_uncommitted_paths": [
+  "AGENTS.md",
+  "README.md",
+  "examples/harness/AGENTS.md",
+  "examples/harness/ARCHITECTURE.md",
+  "examples/harness/README.md",
+  "examples/harness/TASKS.md",
+  "examples/harness/agent_runtime.py",
+  "examples/harness/app.py",
+  "examples/harness/bootstrap-pcc1.sh",
+  "examples/harness/build.sh",
+  "examples/harness/credentials_runtime.py",
+  "examples/harness/gui/upstream-baseline.json",
+  "examples/harness/gui_app.py",
+  "examples/harness/gui_bridge.py",
+  "examples/harness/gui_model.py",
+  "examples/harness/harness",
+  "examples/harness/harness_core.py",
+  "examples/harness/harness_runtime.py",
+  "examples/harness/identity_runtime.py",
+  "examples/harness/loader_runtime.py",
+  "examples/harness/migration/ENTRY_TEMPLATE.md",
+  "examples/harness/migration/README.md",
+  "examples/harness/migration/commits/0001-assembled-runtime-current-pcc1.md",
+  "examples/harness/migration/commits/0002-shared-compiler-framework-bridge.md",
+  "examples/harness/migration/commits/0003-session-observers-and-pump-abi.md",
+  "examples/harness/migration/commits/0004-retain-disabled-group-realms.md",
+  "examples/harness/migration/upstream.json",
+  "examples/harness/migration/validate_ledger.py",
+  "examples/harness/model_runtime.py",
+  "examples/harness/plugin_runtime.py",
+  "examples/harness/session_persistence.py",
+  "examples/harness/session_runtime.py",
+  "examples/harness/settings_runtime.py",
+  "examples/harness/source_provenance.py",
+  "examples/harness/tests/conftest.py",
+  "examples/harness/tests/test_agent_runtime.py",
+  "examples/harness/tests/test_gui_state_lifecycle.py",
+  "examples/harness/tests/test_harness_runtime.py",
+  "examples/harness/tests/test_loader_group_lifecycle.py",
+  "examples/harness/tests/test_loader_runtime.py",
+  "examples/harness/tests/test_model_runtime.py",
+  "examples/harness/tests/test_plugin_runtime.py",
+  "examples/harness/tests/test_session_persistence.py",
+  "examples/harness/tests/test_session_runtime.py",
+  "examples/harness/tests/test_source_provenance.py",
+  "examples/harness/tests/test_tool_runtime.py",
+  "examples/harness/todo_plan_runtime.py",
+  "examples/harness/tool_runtime.py",
+  "pyproject.toml",
+  "tests/fixtures/harness_loader_keyed.py",
+  "tests/test_harness_gui.py",
+  "tests/test_harness_loader_native.py",
+  "tests/test_harness_native_emission.py"
+ ],
+ "application_translation_complete": false,
+ "notes": "This records the historical Python port relocation, independently of the TAG-generated application and native read-only preview."
+}

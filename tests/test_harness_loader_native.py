@@ -10,7 +10,7 @@ from gui_compiler import compiler_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT = ROOT / "examples" / "harness"
+PROJECT = ROOT.parent / "harness"
 SOURCE = ROOT / "tests" / "fixtures" / "harness_loader_keyed.py"
 
 

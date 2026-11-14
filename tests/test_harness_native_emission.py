@@ -6,16 +6,17 @@ from pathlib import Path
 import pytest
 
 
-PROJECT = Path(__file__).resolve().parents[1] / "examples" / "harness"
+PROJECT = Path(__file__).resolve().parents[2] / "harness"
 
 
 @pytest.mark.parametrize("module", ["model_runtime", "agent_runtime", "loader_runtime"])
-def test_harness_module_emits_owned_linux_object(tmp_path, module):
+def test_harness_module_emits_owned_linux_object(tmp_path, module, monkeypatch):
     from pcc.frontends.python.pipeline import compile_python
     from pcc.backend.owned_object_emit import emit_owned_object
     from pcc.backend.elf_x86_64 import parse_relocatable
 
-    source = PROJECT / (module + ".py")
+    monkeypatch.setenv("PCC_PACKAGE_SITE", str(PROJECT))
+    source = PROJECT / "harness" / (module + ".py")
     before = hashlib.sha256(source.read_bytes()).hexdigest()
     (tmp_path / "source-identity.txt").write_text(str(source) + "\n" + before + "\n")
     output = tmp_path / (module + ".ll")

@@ -1,7 +1,7 @@
 """Native acceptance workload importing the actual Harness Loader and kernel."""
 
-from loader_runtime import LoaderEntry, PluginCatalog, PluginLoader
-from plugin_runtime import PluginKernel
+from harness.loader_runtime import LoaderEntry, PluginCatalog, PluginLoader
+from harness.plugin_runtime import PluginKernel
 
 
 def require(condition, message: str) -> None:

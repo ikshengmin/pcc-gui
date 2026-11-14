@@ -20,7 +20,7 @@ code. Nothing is prebuilt and nothing is linked from outside the compiler.
 - `examples/closure_probe/probe.py` – the smallest complete program.
 - `examples/mac_diff_app/` – a Beyond-Compare-style diff viewer (Metal render
   bridge, declarative and headless variants).
-- `examples/harness/` – the agent harness application: GUI front end plus its
+- `../harness/` – the agent harness application: GUI front end plus its
   runtime modules and tests.
 - `tests/` – framework unit tests and pcc1 canaries.
 - `docs/gui-declarative-absorption.md` – design note.
@@ -136,7 +136,7 @@ uv run examples/mac_diff_app/build.sh
 Set `PCC1=/absolute/path/to/candidate/pcc1` only to test an isolated compiler
 candidate. The Metal bridge is maintained under `pcc_gui/native/` and
 compiled with the Xcode toolchain; this GUI build is not a no-clang or zero-libc claim.
-See [Harness](examples/harness/README.md) for the agent application's separate
+See the standalone Harness checkout at `../harness` for the agent application's separate
 build and current migration status.
 
 ## Tests
@@ -153,7 +153,7 @@ The following selection needs neither a native compiler nor a runtime archive;
 it exercises host-Python Harness behavior and declarative contract checks only:
 
 ```bash
-gtimeout 120s env -u LC_ALL uv run pytest examples/harness/tests tests/test_gui_declarative_design.py tests/test_gui_test_infrastructure.py -x -n0 -vv --tb=short
+gtimeout 120s env -u LC_ALL uv run pytest ../harness/tests tests/test_gui_declarative_design.py tests/test_gui_test_infrastructure.py -x -n0 -vv --tb=short
 ```
 
 For native checks, stage and qualify the compiler and archive in the core
@@ -164,7 +164,7 @@ export PCC1=/absolute/path/to/qualified/pcc1
 export PCC_RUNTIME_ARCHIVE=/absolute/path/to/qualified/libpy_runtime_pcc_py.a
 gtimeout 900s env -u LC_ALL uv run pytest -vv -x
 gtimeout 120s env -u LC_ALL uv run pytest -q -x tests/test_pcc_gui_kit.py
-gtimeout 900s env -u LC_ALL uv run pytest -vv -x examples/harness/tests
+gtimeout 900s env -u LC_ALL uv run pytest -vv -x ../harness/tests
 gtimeout 180s env -u LC_ALL uv run pytest -vv -x -m integration tests/test_pcc_gui_kit_darwin.py
 ```
 
