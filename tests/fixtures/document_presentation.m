@@ -3,6 +3,7 @@
 #include <assert.h>
 extern void *pcc_gui_metal_window_create(const char *, int64_t, int64_t);
 extern int64_t pcc_gui_metal_window_close(void *);
+extern int64_t pcc_gui_metal_window_is_closed(void *);
 static NSDictionary *rule(NSString *name, NSString *value) {
   return @{
     @"name" : name,
@@ -31,6 +32,9 @@ int main(void) {
     [NSApplication sharedApplication];
     void *window = pcc_gui_metal_window_create("Document fixture", 300, 200);
     assert(window);
+    assert(pcc_gui_metal_window_is_closed(window) == 0);
+    [(__bridge NSWindow *)window orderOut:nil];
+    assert(pcc_gui_metal_window_is_closed(window) == 0);
     NSArray *nodes = @[
       node(0, -1, @"", @[ @1 ], @[]),
       node(1, 0, @"div", @[ @2, @3 ],
@@ -60,6 +64,7 @@ int main(void) {
     assert(pcc_gui_document_present(window, (const uint8_t *)"{}", 2) == 3);
     assert(pcc_gui_document_node_count(window) == 4);
     pcc_gui_metal_window_close(window);
+    assert(pcc_gui_metal_window_is_closed(window) == 1);
     assert(pcc_gui_document_node_count(window) == -1);
     puts("document presentation ownership/layout passed");
     return 0;

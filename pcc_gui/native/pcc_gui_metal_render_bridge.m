@@ -1042,12 +1042,13 @@ int64_t pcc_gui_metal_window_poll_click(void *handle, int64_t *x_out, int64_t *y
 int64_t pcc_gui_metal_window_is_closed(void *handle) {
   @autoreleasepool {
     if (handle == NULL) return 1;
-    NSWindow *win = (__bridge NSWindow *)handle;
-    /* A hidden window means the user dismissed it.  (Do NOT use
-       windowNumber: an ordered-front window that has not yet been mapped
-       to the window server reports 0, which would false-positive.) */
-    if (![win isVisible]) return 1;
-    return 0;
+    if (![NSThread isMainThread]) return -1;
+    /* Visibility is not lifetime: orderOut, minimization and fullscreen
+       transitions can hide a live window. The existing close observer owns
+       retirement. Compare identities without dereferencing a retired handle. */
+    for (NSWindow *window in pcc_fs_windows)
+      if ((__bridge void *)window == handle) return 0;
+    return 1;
   }
 }
 

@@ -273,7 +273,7 @@ static void pcc_doc_runs(PCCDocumentNode *n, NSMutableAttributedString *text) {
                                   withString:@" "
                                      options:NSRegularExpressionSearch
                                        range:NSMakeRange(0, value.length)];
-    NSColor *color = pcc_doc_color(n.style[@"color"] ?: @"#0f1115");
+    NSColor *color = pcc_doc_color(n.style[@"color"] ?: @"black");
     [text appendAttributedString:
               [[NSAttributedString alloc]
                   initWithString:value
