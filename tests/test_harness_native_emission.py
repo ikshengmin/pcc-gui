@@ -4,9 +4,10 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from harness_project import harness_project_root
 
 
-PROJECT = Path(__file__).resolve().parents[2] / "harness"
+PROJECT = harness_project_root()
 
 
 @pytest.mark.parametrize("module", ["model_runtime", "agent_runtime", "loader_runtime"])

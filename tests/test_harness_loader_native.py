@@ -7,10 +7,11 @@ import subprocess
 import pytest
 
 from gui_compiler import compiler_path
+from harness_project import harness_project_root
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT = ROOT.parent / "harness"
+PROJECT = harness_project_root()
 SOURCE = ROOT / "tests" / "fixtures" / "harness_loader_keyed.py"
 
 

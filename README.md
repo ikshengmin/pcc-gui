@@ -136,8 +136,12 @@ uv run examples/mac_diff_app/build.sh
 Set `PCC1=/absolute/path/to/candidate/pcc1` only to test an isolated compiler
 candidate. The Metal bridge is maintained under `pcc_gui/native/` and
 compiled with the Xcode toolchain; this GUI build is not a no-clang or zero-libc claim.
-See the standalone Harness checkout at `../harness` for the agent application's separate
-build and current migration status.
+The standalone [Harness repository](https://github.com/jiamo/harness) lives at
+`../harness` and owns its application code, generated baseline and migration
+status. Set `PCC_HARNESS_ROOT` for another checkout location. Harness-specific
+integration modules skip when the default adjacent checkout is absent; an
+explicit invalid override fails. Its historical Python port and current
+read-only translated preview have separate, incomplete acceptance boundaries.
 
 ## Tests
 

@@ -12,10 +12,11 @@ import sys
 import pytest
 
 from gui_compiler import compiler_path
+from harness_project import harness_project_root
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT = Path(os.environ.get("PCC_HARNESS_ROOT", ROOT.parent / "harness")).resolve()
+PROJECT = harness_project_root()
 
 
 def _load_model():
