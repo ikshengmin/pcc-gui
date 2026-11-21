@@ -174,7 +174,7 @@ static NSColor *pcc_doc_color(NSString *s) {
 @property NSMutableDictionary *style;
 @property NSMutableArray<PCCDocumentNode *> *children;
 @property NSRect frame;
-@property BOOL hidden;
+@property BOOL hidden, hasEditor;
 @property CGFloat fontSize, lineHeight, opacity;
 @end
 @implementation PCCDocumentNode
@@ -215,7 +215,24 @@ static NSString *pcc_doc_svg_aspect(NSData *encoded) {
   [parser parse];
   return root.aspect;
 }
-@interface PCCDocumentView : NSView
+@interface PCCPasswordFormatter : NSFormatter
+@end
+@implementation PCCPasswordFormatter
+- (NSString *)stringForObjectValue:(id)value { return value; }
+- (BOOL)getObjectValue:(out id *)value forString:(NSString *)string
+       errorDescription:(out NSString **)error {
+  if (value) *value = string;
+  return string.length <= 4096;
+}
+- (BOOL)isPartialStringValid:(NSString *)text newEditingString:(NSString **)replacement
+            errorDescription:(NSString **)error {
+  return text.length <= 4096;
+}
+@end
+@interface PCCDocumentView : NSView <NSTextFieldDelegate>
+@property NSSecureTextField *password;
+@property NSInteger passwordNode;
+@property BOOL edited;
 @property NSArray<PCCDocumentNode *> *nodes;
 @property NSDictionary *images;
 @property NSString *status;
@@ -633,7 +650,7 @@ static void pcc_doc_draw(PCCDocumentNode *n, NSDictionary *images) {
                    hints:nil];
     }
   } else if ([n.source[@"tag"] isEqual:@"input"] &&
-             ![n.source[@"attributes"][@"value"] length]) {
+             !n.hasEditor && ![n.source[@"attributes"][@"value"] length]) {
     NSString *placeholder = n.source[@"attributes"][@"placeholder"];
     if ([placeholder isKindOfClass:NSString.class] && placeholder.length) {
       NSRect box = pcc_doc_inner(n);
@@ -677,6 +694,52 @@ static void pcc_doc_draw(PCCDocumentNode *n, NSDictionary *images) {
   [NSGraphicsContext restoreGraphicsState];
 }
 @implementation PCCDocumentView
+- (void)controlTextDidChange:(NSNotification *)notification {
+  if (notification.object == self.password) self.edited = YES;
+}
+- (void)positionPassword {
+  if (!self.password) return;
+  PCCDocumentNode *node = self.nodes[self.passwordNode];
+  NSRect inner = pcc_doc_inner(node);
+  CGFloat height = MIN(node.frame.size.height, self.password.intrinsicContentSize.height);
+  self.password.frame = NSMakeRect(inner.origin.x, NSMidY(node.frame) - height / 2,
+                                   inner.size.width, height);
+}
+- (void)layout {
+  [super layout];
+  if (self.password) {
+    pcc_doc_layout(self.nodes[0], self.bounds);
+    [self positionPassword];
+  }
+}
+- (void)bindPassword:(NSInteger)index keepEditor:(BOOL)keep {
+  if (!keep && self.password) {
+    [self.password abortEditing];
+    self.password.stringValue = @"";
+    self.password.delegate = nil;
+    [self.password removeFromSuperview];
+    self.password = nil;
+    self.edited = NO;
+  }
+  self.passwordNode = index;
+  if (index < 0) return;
+  PCCDocumentNode *node = self.nodes[index];
+  if (!self.password) {
+    NSSecureTextField *field = [NSSecureTextField new];
+    field.bezeled = NO;
+    field.bordered = NO;
+    field.drawsBackground = NO;
+    field.formatter = [PCCPasswordFormatter new];
+    field.delegate = self;
+    self.password = field;
+    [self addSubview:field];
+  }
+  node.hasEditor = YES;
+  self.password.font = pcc_doc_font(node);
+  self.password.placeholderString = node.source[@"attributes"][@"placeholder"];
+  self.password.accessibilityLabel = node.source[@"attributes"][@"aria-label"] ?: self.password.placeholderString;
+  [self positionPassword];
+}
 - (BOOL)isFlipped {
   return YES;
 }
@@ -718,6 +781,11 @@ static void pcc_doc_draw(PCCDocumentNode *n, NSDictionary *images) {
   return -1;
 }
 - (void)mouseDown:(NSEvent *)event {
+  if (self.password && NSPointInRect([self convertPoint:event.locationInWindow fromView:nil],
+                                     self.nodes[self.passwordNode].frame)) {
+    [self.window makeFirstResponder:self.password];
+    return;
+  }
   NSInteger index = [self buttonAtEvent:event];
   self.pressedButton = -1;
   if (index < 0) return;
@@ -745,6 +813,10 @@ static BOOL pcc_doc_known(void *handle) {
 }
 int32_t pcc_gui_document_present(void *handle, const uint8_t *bytes,
                                  uint64_t size) {
+  return pcc_gui_document_present_with_password(handle, bytes, size, -1);
+}
+int32_t pcc_gui_document_present_with_password(void *handle, const uint8_t *bytes,
+                                               uint64_t size, int64_t index) {
   @autoreleasepool {
     if (!pcc_doc_known(handle) || !bytes || size == 0 ||
         size > 16 * 1024 * 1024)
@@ -864,8 +936,19 @@ int32_t pcc_gui_document_present(void *handle, const uint8_t *bytes,
       }
     NSWindow *window = (__bridge NSWindow *)handle;
     PCCDocumentView *previous = objc_getAssociatedObject(window, &pcc_doc_key);
-    PCCDocumentView *view =
-        [[PCCDocumentView alloc] initWithFrame:window.contentView.bounds];
+    pcc_doc_layout(nodes[0], window.contentView.bounds);
+    if (index < -1 || index >= (int64_t)nodes.count) return 3;
+    if (index >= 0) {
+      PCCDocumentNode *node = nodes[index];
+      NSDictionary *attrs = node.source[@"attributes"];
+      if (![node.source[@"tag"] isEqual:@"input"] ||
+          ![[attrs[@"type"] lowercaseString] isEqual:@"password"]) return 3;
+      if (NSIsEmptyRect(node.frame) || node.hidden || attrs[@"disabled"] || attrs[@"readonly"])
+        index = -1;
+    }
+    BOOL keepEditor = index >= 0 && previous.password && previous.passwordNode == index &&
+        [previous.nodes[index].source[@"attributes"][@"id"] isEqual:nodes[index].source[@"attributes"][@"id"]];
+    PCCDocumentView *view = previous ?: [[PCCDocumentView alloc] initWithFrame:window.contentView.bounds];
     view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     view.nodes = nodes;
     view.images = images;
@@ -875,8 +958,8 @@ int32_t pcc_gui_document_present(void *handle, const uint8_t *bytes,
     view.enabledButtons = [NSMutableIndexSet indexSet];
     view.pressedButton = -1;
     view.pendingButton = -1;
-    [window.contentView addSubview:view];
-    [previous removeFromSuperview];
+    if (!previous) [window.contentView addSubview:view];
+    [view bindPassword:index keepEditor:keepEditor];
     objc_setAssociatedObject(window, &pcc_doc_key, view,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if ([pcc_metal_view window] == window)
@@ -900,6 +983,23 @@ int64_t pcc_gui_document_take_click(void *handle) {
   NSInteger result = view.pendingButton;
   view.pendingButton = -1;
   return result;
+}
+int64_t pcc_gui_document_take_password_edit(void *handle, uint8_t *bytes,
+                                            uint32_t capacity, uint32_t *length) {
+  if (!pcc_doc_known(handle) || !bytes || !length) return -1;
+  PCCDocumentView *view = objc_getAssociatedObject((__bridge NSWindow *)handle, &pcc_doc_key);
+  if (!view.edited || !view.password) return -1;
+  NSString *text = view.password.currentEditor.string ?: view.password.stringValue;
+  NSUInteger size = text.length * 2;
+  if (text.length > 4096 || size > capacity) return -1;
+  for (NSUInteger i = 0; i < text.length; i++) {
+    unichar unit = [text characterAtIndex:i];
+    bytes[2*i] = unit & 255;
+    bytes[2*i+1] = unit >> 8;
+  }
+  *length = (uint32_t)size;
+  view.edited = NO;
+  return view.passwordNode;
 }
 int32_t pcc_gui_document_status(void *handle, const char *message) {
   if (!pcc_doc_known(handle) || !message)
