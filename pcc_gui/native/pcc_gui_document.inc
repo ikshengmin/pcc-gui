@@ -704,6 +704,9 @@ static void pcc_doc_draw(PCCDocumentNode *n, NSDictionary *images) {
         NSForegroundColorAttributeName : NSColor.whiteColor
       }];
 }
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return self.enabledButtons.count > 0 || [super acceptsFirstMouse:event];
+}
 - (NSInteger)buttonAtEvent:(NSEvent *)event {
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
   for (PCCDocumentNode *node in self.nodes.reverseObjectEnumerator) {
