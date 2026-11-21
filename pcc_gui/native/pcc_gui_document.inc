@@ -219,6 +219,9 @@ static NSString *pcc_doc_svg_aspect(NSData *encoded) {
 @property NSArray<PCCDocumentNode *> *nodes;
 @property NSDictionary *images;
 @property NSString *status;
+@property NSMutableIndexSet *enabledButtons;
+@property NSInteger pressedButton;
+@property NSInteger pendingButton;
 @property CGFloat sourceWidth, sourceHeight;
 @end
 static NSFont *pcc_doc_font(PCCDocumentNode *n) {
@@ -686,19 +689,31 @@ static void pcc_doc_draw(PCCDocumentNode *n, NSDictionary *images) {
         NSForegroundColorAttributeName : NSColor.whiteColor
       }];
 }
-- (void)mouseDown:(NSEvent *)event {
+- (NSInteger)buttonAtEvent:(NSEvent *)event {
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
-  for (PCCDocumentNode *n in self.nodes) {
-    if (n.hidden || !NSPointInRect(p, n.frame))
-      continue;
-    if ([n.source[@"tag"] isEqual:@"button"] ||
-        [n.source[@"tag"] isEqual:@"input"]) {
-      self.status =
-          @"Preview only — application controls are not connected yet";
-      [self setNeedsDisplay:YES];
-      return;
-    }
+  for (PCCDocumentNode *node in self.nodes.reverseObjectEnumerator) {
+    if (!node.hidden && NSPointInRect(p, node.frame) &&
+        [node.source[@"tag"] isEqual:@"button"] &&
+        !node.source[@"attributes"][@"disabled"])
+      return [node.source[@"index"] integerValue];
   }
+  return -1;
+}
+- (void)mouseDown:(NSEvent *)event {
+  NSInteger index = [self buttonAtEvent:event];
+  self.pressedButton = -1;
+  if (index < 0) return;
+  if ([self.enabledButtons containsIndex:index]) self.pressedButton = index;
+  else {
+    self.status = @"This action is unavailable.";
+    [self setNeedsDisplay:YES];
+  }
+}
+- (void)mouseUp:(NSEvent *)event {
+  NSInteger pressed = self.pressedButton;
+  self.pressedButton = -1;
+  if (pressed >= 0 && self.pendingButton < 0 && [self buttonAtEvent:event] == pressed)
+    self.pendingButton = pressed;
 }
 @end
 static char pcc_doc_key;
@@ -839,6 +854,9 @@ int32_t pcc_gui_document_present(void *handle, const uint8_t *bytes,
     view.sourceWidth = width;
     view.sourceHeight = height;
     view.status = previous.status;
+    view.enabledButtons = [NSMutableIndexSet indexSet];
+    view.pressedButton = -1;
+    view.pendingButton = -1;
     [window.contentView addSubview:view];
     [previous removeFromSuperview];
     objc_setAssociatedObject(window, &pcc_doc_key, view,
@@ -848,6 +866,22 @@ int32_t pcc_gui_document_present(void *handle, const uint8_t *bytes,
     [view setNeedsDisplay:YES];
     return 0;
   }
+}
+int32_t pcc_gui_document_enable_button(void *handle, int64_t index) {
+  if (!pcc_doc_known(handle)) return 2;
+  PCCDocumentView *view = objc_getAssociatedObject((__bridge NSWindow *)handle, &pcc_doc_key);
+  if (!view || index < 0 || index >= (int64_t)view.nodes.count ||
+      ![view.nodes[index].source[@"tag"] isEqual:@"button"]) return 3;
+  [view.enabledButtons addIndex:(NSUInteger)index];
+  return 0;
+}
+int64_t pcc_gui_document_take_click(void *handle) {
+  if (!pcc_doc_known(handle)) return -1;
+  PCCDocumentView *view = objc_getAssociatedObject((__bridge NSWindow *)handle, &pcc_doc_key);
+  if (!view) return -1;
+  NSInteger result = view.pendingButton;
+  view.pendingButton = -1;
+  return result;
 }
 int32_t pcc_gui_document_status(void *handle, const char *message) {
   if (!pcc_doc_known(handle) || !message)
