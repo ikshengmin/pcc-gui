@@ -266,8 +266,11 @@ static BOOL pcc_doc_inline(PCCDocumentNode *n) {
       (!display && [@[ @"span", @"em", @"strong", @"a", @"b", @"i", @"label" ]
                        containsObject:tag]);
 }
+static BOOL pcc_doc_fully_clipped(PCCDocumentNode *node) {
+  return [node.style[@"clip-path"] isEqual:@"inset(50%)"];
+}
 static void pcc_doc_runs(PCCDocumentNode *n, NSMutableAttributedString *text) {
-  if (n.hidden)
+  if (n.hidden || pcc_doc_fully_clipped(n))
     return;
   NSString *value = n.source[@"text"];
   if ([n.source[@"name"] isEqual:@"#text"] && value.length) {
@@ -572,7 +575,7 @@ static NSData *pcc_doc_hex(NSString *hex) {
   return data;
 }
 static void pcc_doc_draw(PCCDocumentNode *n, NSDictionary *images) {
-  if (n.hidden || NSIsEmptyRect(n.frame))
+  if (n.hidden || pcc_doc_fully_clipped(n) || NSIsEmptyRect(n.frame))
     return;
   [NSGraphicsContext saveGraphicsState];
   CGFloat radius = pcc_doc_length(n.style[@"border-radius"], n.frame.size.width,
@@ -628,6 +631,18 @@ static void pcc_doc_draw(PCCDocumentNode *n, NSDictionary *images) {
                 fraction:n.opacity
           respectFlipped:YES
                    hints:nil];
+    }
+  } else if ([n.source[@"tag"] isEqual:@"input"] &&
+             ![n.source[@"attributes"][@"value"] length]) {
+    NSString *placeholder = n.source[@"attributes"][@"placeholder"];
+    if ([placeholder isKindOfClass:NSString.class] && placeholder.length) {
+      NSRect box = pcc_doc_inner(n);
+      NSDictionary *attributes = @{NSFontAttributeName: pcc_doc_font(n),
+                                    NSForegroundColorAttributeName: NSColor.placeholderTextColor};
+      NSRectClip(box);
+      CGFloat height = [placeholder sizeWithAttributes:attributes].height;
+      [placeholder drawAtPoint:NSMakePoint(NSMinX(box), NSMidY(box) - height / 2)
+                withAttributes:attributes];
     }
   } else if (pcc_doc_textbox(n)) {
     NSMutableAttributedString *text =
