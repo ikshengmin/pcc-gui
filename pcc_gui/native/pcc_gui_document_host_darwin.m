@@ -1,5 +1,11 @@
 // Generic host for an original-source translated renderer. No JS/Python engine.
 #include "pcc_gui_document.h"
+#ifndef PCC_DOCUMENT_DEFAULT_STATUS
+#define PCC_DOCUMENT_DEFAULT_STATUS @"Document ready"
+#endif
+#ifndef PCC_DOCUMENT_DEFAULT_OPENING
+#define PCC_DOCUMENT_DEFAULT_OPENING @"Opening document…"
+#endif
 #import <AppKit/AppKit.h>
 #import <CoreText/CoreText.h>
 #include <signal.h>
@@ -268,7 +274,7 @@ int main(int argc, const char **argv) {
                   if ([buttons containsObject:node[@"attributes"][@"id"] ?: @""])
                     pcc_gui_document_enable_button(handle, [node[@"index"] longLongValue]);
                 }
-                NSString *status = NSBundle.mainBundle.infoDictionary[@"PCCDocumentStatus"] ?: @"Document ready";
+                NSString *status = NSBundle.mainBundle.infoDictionary[@"PCCDocumentStatus"] ?: PCC_DOCUMENT_DEFAULT_STATUS;
                 pcc_gui_document_status(handle, status.UTF8String);
               }
               NSString *title = data[@"title"];
@@ -287,7 +293,7 @@ int main(int argc, const char **argv) {
           if ([phase hasPrefix:@"t2p-browser-replay: original main IPC handlers installed"])
             loading.stringValue = @"Starting window…";
           if ([phase isEqual:@"t2p-browser-replay: original preload initialization completed"])
-            loading.stringValue = NSBundle.mainBundle.infoDictionary[@"PCCDocumentOpeningLabel"] ?: @"Opening document…";
+            loading.stringValue = NSBundle.mainBundle.infoDictionary[@"PCCDocumentOpeningLabel"] ?: PCC_DOCUMENT_DEFAULT_OPENING;
         }
       }
       if (presented && !captured) {
