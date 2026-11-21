@@ -10,6 +10,21 @@ It is an ordinary pcc package. An application does `import pcc_gui`, and
 `pcc1` compiles the framework into the program together with the application
 code. Nothing is prebuilt and nothing is linked from outside the compiler.
 
+## Document window host
+
+Applications can also supply a renderer executable that writes live document
+frames and consumes generation-tagged input over standard streams.
+`tools/package_document_app.py --resources DIR --config CONFIG --out NEW_APP`
+selects the desktop packaging provider. The Darwin provider compiles the
+AppKit bridge and window host, bundles resources and signs the result. The
+application specifies its title, controls and renderer. A CPython child can
+drive this interface using ordinary Python packages.
+
+Linux business logic can exercise the same renderer protocol without a window.
+A native Linux document window still needs a platform provider and real
+display/input qualification. The `pcc_gui` Python package itself uses PCC
+compiler intrinsics; its native bridge also exposes a callable C ABI.
+
 ## Layout
 
 - `pcc_gui/` – the framework package (17 modules: `pcc_gui_kit`,
